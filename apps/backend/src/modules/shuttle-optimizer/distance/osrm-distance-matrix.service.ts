@@ -1,0 +1,59 @@
+import { Injectable, Logger } from '@nestjs/common';
+
+export interface DistanceMatrixResult {
+  /** Ma trận distance (km) */
+  distances: number[][];
+  /** Ma trận duration (phút) */
+  durations: number[][];
+  /** Nguồn: osrm hoặc haversine (fallback) */
+  source: 'osrm' | 'haversine';
+}
+
+/**
+ * Service lấy ma trận khoảng cách cho N+1 node (1 depot + N customer).
+ *
+ * Strategy:
+ *   1. Thử gọi OSRM /table endpoint → kết quả đường bộ thực tế
+ *   2. Nếu OSRM lỗi → fallback về Haversine (đường chim bay × 1.3)
+ *
+ * Được dùng bởi:
+ *   - BenchmarkRunner khi tạo TSPTWInstance từ DB
+ *   - InstanceGenerator khi sinh test case random
+ *
+ * OSRM module đã có sẵn ở `../osrm/osrm.service.ts` — có thể inject và dùng.
+ *
+ * TODO Week 1 Day 2-3: Implement + integration với OsrmService có sẵn.
+ */
+@Injectable()
+export class OsrmDistanceMatrixService {
+  private readonly logger = new Logger(OsrmDistanceMatrixService.name);
+
+  /**
+   * Lấy distance matrix cho danh sách tọa độ.
+   * @param coordinates mảng [lng, lat] — index 0 là depot, 1..N là customers
+   */
+  getMatrix(
+    coordinates: Array<[number, number]>,
+  ): Promise<DistanceMatrixResult> {
+    void coordinates;
+    // TODO Week 1: gọi OSRM /table; fallback Haversine nếu lỗi
+    return Promise.reject(new Error('Not implemented yet'));
+  }
+
+  /**
+   * Haversine formula — khoảng cách great-circle (km) giữa 2 điểm.
+   * Dùng làm fallback khi OSRM không khả dụng.
+   */
+  protected haversineKm(a: [number, number], b: [number, number]): number {
+    const R = 6371; // km
+    const toRad = (deg: number): number => (deg * Math.PI) / 180;
+    const dLat = toRad(b[1] - a[1]);
+    const dLng = toRad(b[0] - a[0]);
+    const lat1 = toRad(a[1]);
+    const lat2 = toRad(b[1]);
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.sin(dLng / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+}
