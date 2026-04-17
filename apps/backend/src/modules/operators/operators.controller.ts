@@ -37,20 +37,20 @@ export class OperatorsController {
   // ===== PUBLIC ENDPOINTS =====
 
   @Post('register')
-  @ApiOperation({ summary: 'Dang ky nha xe moi' })
+  @ApiOperation({ summary: 'Đăng ký nhà xe mới' })
   async register(@Body() createOperatorDto: CreateOperatorDto) {
     const operator = await this.operatorsService.create(createOperatorDto);
     return {
       success: true,
       data: operator,
-      message: 'Dang ky thanh cong. Vui long cho admin duyet.',
+      message: 'Đăng ký nhà xe thành công, vui lòng chờ admin duyệt',
     };
   }
 
   // ===== OPERATOR ENDPOINTS (can auth sau nay) =====
 
   @Get()
-  @ApiOperation({ summary: 'Danh sach nha xe' })
+  @ApiOperation({ summary: 'Danh sách nhà xe' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'status', required: false, enum: OperatorStatus })
@@ -71,14 +71,14 @@ export class OperatorsController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Chi tiet nha xe' })
+  @ApiOperation({ summary: 'Chi tiết nhà xe' })
   async findOne(@Param('id', MongoIdPipe) id: string) {
     const operator = await this.operatorsService.findById(id);
     return { success: true, data: operator };
   }
 
   @Put(':id')
-  @ApiOperation({ summary: 'Cap nhat thong tin nha xe' })
+  @ApiOperation({ summary: 'Cập nhật thông tin nhà xe' })
   async update(
     @Param('id', MongoIdPipe) id: string,
     @Body() dto: UpdateOperatorDto,
@@ -88,10 +88,10 @@ export class OperatorsController {
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: 'Xoa nha xe' })
+  @ApiOperation({ summary: 'Xóa nhà xe' })
   async remove(@Param('id', MongoIdPipe) id: string) {
     await this.operatorsService.remove(id);
-    return { success: true, message: 'Xoa nha xe thanh cong' };
+    return { success: true, message: 'Xóa nhà xe thành công' };
   }
 
   // ===== ADMIN ENDPOINTS (Da khao bao bao mat) =====
@@ -100,7 +100,7 @@ export class OperatorsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] Duyet nha xe' })
+  @ApiOperation({ summary: '[Admin] Duyệt nhà xe' })
   async approve(
     @Param('id', MongoIdPipe) id: string,
     @CurrentUser() admin: JwtPayload,
@@ -113,7 +113,7 @@ export class OperatorsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] Tu choi nha xe' })
+  @ApiOperation({ summary: '[Admin] Từ chối nhà xe' })
   async reject(
     @Param('id', MongoIdPipe) id: string,
     @Body('reason') reason: string,
@@ -126,7 +126,7 @@ export class OperatorsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] Tam ngung nha xe' })
+  @ApiOperation({ summary: '[Admin] Tạm ngưng nhà xe' })
   async suspend(
     @Param('id', MongoIdPipe) id: string,
     @Body('reason') reason: string,
@@ -139,7 +139,7 @@ export class OperatorsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
   @ApiBearerAuth()
-  @ApiOperation({ summary: '[Admin] Mo lai nha xe' })
+  @ApiOperation({ summary: '[Admin] Mở lại nhà xe' })
   async resume(@Param('id', MongoIdPipe) id: string) {
     const operator = await this.operatorsService.resume(id);
     return { success: true, data: operator };
@@ -148,7 +148,7 @@ export class OperatorsController {
   // ===== BANK INFO =====
 
   @Put(':id/bank-info')
-  @ApiOperation({ summary: 'Cap nhat thong tin ngan hang' })
+  @ApiOperation({ summary: 'Cập nhật thông tin ngân hàng' })
   async updateBankInfo(
     @Param('id', MongoIdPipe) id: string,
     @Body() dto: UpdateBankInfoDto,

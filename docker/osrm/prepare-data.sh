@@ -12,10 +12,17 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA_DIR="$SCRIPT_DIR/data"
 PBF_FILE="vietnam-latest.osm.pbf"
 OSRM_IMAGE="osrm/osrm-backend:latest"
-PROFILE="/opt/car.lua"
 
 mkdir -p "$DATA_DIR"
 cd "$DATA_DIR"
+
+# On Windows/Git Bash, MSYS converts Unix paths in docker -v arguments.
+# cygpath -m gives Docker-compatible forward-slash Windows paths (e.g. D:/foo/bar).
+if command -v cygpath &>/dev/null; then
+  DOCKER_DATA_DIR="$(cygpath -m "$DATA_DIR")"
+else
+  DOCKER_DATA_DIR="$DATA_DIR"
+fi
 
 # 1. Tải bản đồ Việt Nam từ Geofabrik (nếu chưa có)
 if [ ! -f "$PBF_FILE" ]; then
@@ -27,17 +34,20 @@ fi
 
 # 2. Extract
 echo "▸ osrm-extract (có thể mất 5-10 phút)..."
-docker run --rm -t -v "$DATA_DIR:/data" "$OSRM_IMAGE" \
-  osrm-extract -p "$PROFILE" "/data/$PBF_FILE"
+MSYS_NO_PATHCONV=1 docker run --rm -t \
+  -v "$DOCKER_DATA_DIR:/data" "$OSRM_IMAGE" \
+  osrm-extract -p /opt/car.lua "/data/$PBF_FILE"
 
 # 3. Partition (MLD algorithm)
 echo "▸ osrm-partition..."
-docker run --rm -t -v "$DATA_DIR:/data" "$OSRM_IMAGE" \
+MSYS_NO_PATHCONV=1 docker run --rm -t \
+  -v "$DOCKER_DATA_DIR:/data" "$OSRM_IMAGE" \
   osrm-partition "/data/vietnam-latest.osrm"
 
 # 4. Customize
 echo "▸ osrm-customize..."
-docker run --rm -t -v "$DATA_DIR:/data" "$OSRM_IMAGE" \
+MSYS_NO_PATHCONV=1 docker run --rm -t \
+  -v "$DOCKER_DATA_DIR:/data" "$OSRM_IMAGE" \
   osrm-customize "/data/vietnam-latest.osrm"
 
 echo ""

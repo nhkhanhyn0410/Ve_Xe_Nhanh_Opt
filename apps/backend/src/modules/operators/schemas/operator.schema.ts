@@ -15,7 +15,7 @@ export class Operator {
   employeeCodePrefix?: string;
 
   @Prop({
-    required: true,
+    sparse: true,
     unique: true,
     index: true,
     lowercase: true,

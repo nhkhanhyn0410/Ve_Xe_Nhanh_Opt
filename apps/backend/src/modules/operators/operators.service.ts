@@ -48,7 +48,7 @@ export class OperatorsService {
   }
 
   /**
-   * Lay danh sach nha xe (co pagination + filter)
+   * Lấy danh sách nhà xe với phân trang, lọc theo trạng thái và tìm kiếm
    */
   async findAll(query: {
     page?: number;
@@ -84,18 +84,18 @@ export class OperatorsService {
   }
 
   /**
-   * Lay thong tin 1 nha xe theo ID
+   * Lấy thông tin nhà xe theo ID
    */
   async findById(id: string): Promise<Operator> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     return operator;
   }
 
   /**
-   * Tim nha xe theo email
+   * Tìm nhà xe theo email
    */
   async findByEmail(email: string): Promise<OperatorDocument | null> {
     return this.operatorModel.findOne({ email }).select('+password').exec();
@@ -126,47 +126,47 @@ export class OperatorsService {
   }
 
   /**
-   * Cap nhat thong tin nha xe
+   * Câp nhật thông tin nhà xe
    */
   async update(id: string, dto: UpdateOperatorDto): Promise<Operator> {
     const operator = await this.operatorModel.findByIdAndUpdate(id, dto, {
       new: true,
     });
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     return operator;
   }
 
   /**
-   * Xoa nha xe (chi cho phep khi status = PENDING hoac REJECTED)
+   * Xóa nhà xe
    */
   async remove(id: string): Promise<void> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     if (operator.status === OperatorStatus.APPROVED) {
       throw new BadRequestException(
-        'Khong the xoa nha xe da duoc duyet. Hay chuyen sang trang thai "Tam ngung" thay vi xoa.',
+        'Không thể xóa nhà xe đã được duyệt. Vui lòng liên hệ quản trị viên để biết thêm chi tiết.',
       );
     }
     await this.operatorModel.findByIdAndDelete(id);
   }
 
-  // ===== DUYET NHA XE (Admin operations) =====
+  // ===== (Admin operations) =====
 
   /**
-   * Duyet nha xe
+   * Duyệt nhà xe
    */
   async approve(id: string, approvedBy: string): Promise<Operator> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     if (operator.status !== OperatorStatus.PENDING) {
       throw new BadRequestException(
-        `Khong the duyet nha xe co trang thai "${operator.status}". Chi duyet khi trang thai la "pending".`,
+        `Không thể duyệt nhà xe đã có trạng thái: "${operator.status}".Chỉ duyệt khi có trạng thái là "pending".`,
       );
     }
 
@@ -179,16 +179,16 @@ export class OperatorsService {
   }
 
   /**
-   * Tu choi nha xe
+   * Tu chối nhà xe với lý do (chỉ áp dụng khi đang ở trạng thái PENDING)
    */
   async reject(id: string, reason: string): Promise<Operator> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     if (operator.status !== OperatorStatus.PENDING) {
       throw new BadRequestException(
-        `Khong the tu choi nha xe co trang thai "${operator.status}"`,
+        `Không thể từ chối nhà xe đã có trạng thái "${operator.status}"`,
       );
     }
 
@@ -198,16 +198,16 @@ export class OperatorsService {
   }
 
   /**
-   * Tam ngung nha xe
+   * Tạm ngưng nhà xe với lý do (chỉ áp dụng khi đang ở trạng thái APPROVED)
    */
   async suspend(id: string, reason: string): Promise<Operator> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     if (operator.status !== OperatorStatus.APPROVED) {
       throw new BadRequestException(
-        'Chi co the tam ngung nha xe da duoc duyet',
+        'Chỉ có thể tạm ngưng nhà xe đang ở trạng thái "approved"',
       );
     }
 
@@ -217,16 +217,16 @@ export class OperatorsService {
   }
 
   /**
-   * Mo lai nha xe (resume tu suspended)
+   * Mở lại nhà xe (chỉ áp dụng khi đang ở trạng thái SUSPENDED)
    */
   async resume(id: string): Promise<Operator> {
     const operator = await this.operatorModel.findById(id);
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     if (operator.status !== OperatorStatus.SUSPENDED) {
       throw new BadRequestException(
-        'Chi co the mo lai nha xe dang bi tam ngung',
+        'Chỉ có thể mở lại nhà xe đang ở trạng thái "suspended"',
       );
     }
 
@@ -238,7 +238,7 @@ export class OperatorsService {
   // ===== BANK INFO =====
 
   /**
-   * Cap nhat thong tin ngan hang
+   * Cập nhât thông tin ngân hàng của nhà xe
    */
   async updateBankInfo(id: string, dto: UpdateBankInfoDto): Promise<Operator> {
     const operator = await this.operatorModel.findByIdAndUpdate(
@@ -247,7 +247,7 @@ export class OperatorsService {
       { new: true },
     );
     if (!operator) {
-      throw new NotFoundException('Nha xe khong ton tai');
+      throw new NotFoundException('Nhà xe không tồn tại');
     }
     return operator;
   }

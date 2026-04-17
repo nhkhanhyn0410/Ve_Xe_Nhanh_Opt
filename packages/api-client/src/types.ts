@@ -34,7 +34,7 @@ export interface RegisterResponse extends TokenPair {
 }
 
 export interface UserLoginResponse extends TokenPair {
-  messeger: string;
+  message: string;
   user: IUser | Record<string, unknown>;
 }
 
