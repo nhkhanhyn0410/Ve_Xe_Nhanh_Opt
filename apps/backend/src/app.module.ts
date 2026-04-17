@@ -17,6 +17,7 @@ import { RedisModule } from './modules/redis/redis.module';
 import { OsrmModule } from './modules/osrm/osrm.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { SearchModule } from './modules/search/search.module';
+import { ShuttleOptimizerModule } from './modules/shuttle-optimizer/shuttle-optimizer.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SearchModule } from './modules/search/search.module';
     EmployeesModule,
     BookingsModule,
     SearchModule,
+    ShuttleOptimizerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

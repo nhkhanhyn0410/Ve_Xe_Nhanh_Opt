@@ -1,5 +1,5 @@
-import { Body, Controller, Get, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ShuttleOptimizerService } from './shuttle-optimizer.service';
 import { SolveRequestDto } from './dto/solve-request.dto';
 import { SolveResponseDto } from './dto/solve-response.dto';
@@ -15,6 +15,23 @@ export class ShuttleOptimizerController {
   @ApiOperation({ summary: 'Liệt kê tất cả solver đang có' })
   listSolvers(): { solvers: string[] } {
     return { solvers: this.shuttleOptimizerService.listSolvers() };
+  }
+
+  @Get('demo')
+  @ApiOperation({
+    summary: 'Chạy demo với 10 điểm đón thật ở TPHCM — không cần data hay auth',
+    description:
+      'Dùng Haversine distance matrix (không cần OSRM). ' +
+      'Depot: Bến Xe Miền Đông. 10 customer trải đều các quận TPHCM. ' +
+      'Thay solver qua query param ?solver=greedy-nearest-neighbor',
+  })
+  @ApiQuery({
+    name: 'solver',
+    required: false,
+    description: 'Tên solver. Mặc định: greedy-nearest-neighbor',
+  })
+  async demo(@Query('solver') solver?: string): Promise<SolveResponseDto> {
+    return this.shuttleOptimizerService.buildDemoInstance(solver);
   }
 
   @Post('solve')

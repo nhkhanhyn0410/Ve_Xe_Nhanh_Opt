@@ -11,6 +11,7 @@ import { TSPTWInstance } from './models/tsptw-instance';
 import { TSPTWSolution } from './models/tsptw-solution';
 import { SolveRequestDto } from './dto/solve-request.dto';
 import { SolveResponseDto, RouteStepDto } from './dto/solve-response.dto';
+import { DEMO_SEED } from './benchmark/seed-data';
 
 /**
  * Facade service cho module shuttle-optimizer.
@@ -74,6 +75,43 @@ export class ShuttleOptimizerService {
 
     const solution = await solver.solve(instance);
     return this.toResponseDto(instance, solution);
+  }
+
+  /**
+   * Tạo instance từ seed data (10 điểm đón thật ở TPHCM).
+   * Dùng Haversine để build distance matrix — không cần OSRM hay DB.
+   * Phục vụ endpoint GET /demo và test solver nhanh.
+   */
+  async buildDemoInstance(solverName?: string): Promise<SolveResponseDto> {
+    const solver = this.solvers.get(solverName ?? 'greedy-nearest-neighbor');
+    if (!solver) {
+      throw new BadRequestException(
+        `Solver '${solverName}' không tồn tại. Danh sách: ${this.listSolvers().join(', ')}`,
+      );
+    }
+
+    const instance = await this.buildInstanceFromSeed();
+    this.logger.log(
+      `[DEMO] Solving N=${instance.customers.length} customers with ${solver.name}`,
+    );
+
+    const solution = await solver.solve(instance);
+    return this.toResponseDto(instance, solution);
+  }
+
+  /**
+   * Build TSPTWInstance từ DEMO_SEED bằng Haversine distance matrix.
+   */
+  private async buildInstanceFromSeed(): Promise<TSPTWInstance> {
+    const allNodes = [DEMO_SEED.depot, ...DEMO_SEED.customers];
+    const coordinates = allNodes.map((n) => n.coordinates);
+    const matrix = await this.distanceService.getMatrix(coordinates);
+
+    return {
+      ...DEMO_SEED,
+      distanceMatrix: matrix.distances,
+      durationMatrix: matrix.durations,
+    };
   }
 
   /**
