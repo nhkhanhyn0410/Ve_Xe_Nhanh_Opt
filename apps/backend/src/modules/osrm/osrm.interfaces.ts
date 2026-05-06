@@ -16,11 +16,23 @@ export interface OsrmLeg {
   readonly duration: number; // seconds
 }
 
+/** GeoJSON LineString trả về khi gọi ?geometries=geojson */
+export interface OsrmGeoJsonGeometry {
+  readonly type: 'LineString';
+  readonly coordinates: readonly (readonly [number, number])[]; // [lng, lat]
+}
+
 export interface OsrmRoute {
   readonly distance: number; // meters
   readonly duration: number; // seconds
   readonly legs: readonly OsrmLeg[];
-  readonly geometry?: string; // encoded polyline (if overview != false)
+  /**
+   * Hình dạng đường.
+   *   - string: polyline5 encoding (mặc định)
+   *   - OsrmGeoJsonGeometry: khi gọi với ?geometries=geojson
+   *   - undefined: khi gọi với ?overview=false
+   */
+  readonly geometry?: string | OsrmGeoJsonGeometry;
 }
 
 export interface OsrmRouteResponse {

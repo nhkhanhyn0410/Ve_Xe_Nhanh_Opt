@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint ./src --ext .ts,.tsx --cache"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.1",
@@ -15,16 +15,19 @@
     "@ve_xe_nhanh_ts/api-client": "*",
     "antd": "^6.3.5",
     "dayjs": "^1.11.20",
+    "leaflet": "^1.9.4",
     "next": "16.2.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-hook-form": "^7.72.0",
+    "react-leaflet": "^5.0.0",
     "socket.io-client": "^4.8.3",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

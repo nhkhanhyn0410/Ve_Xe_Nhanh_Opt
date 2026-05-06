@@ -98,6 +98,39 @@ export class OsrmService implements OnModuleInit {
     }
   }
 
+  /**
+   * Lấy hình dạng (polyline GeoJSON) của 1 lộ trình qua nhiều waypoints.
+   *
+   * Dùng để vẽ đường đi thật trên bản đồ thay vì đường thẳng.
+   *
+   * @param waypoints thứ tự ghé thăm, cần ≥ 2 điểm
+   * @returns mảng [lng, lat] của từng điểm trên polyline, hoặc null khi OSRM lỗi
+   */
+  async getRouteGeometry(
+    waypoints: readonly OsrmCoordinate[],
+  ): Promise<[number, number][] | null> {
+    if (!this.available) return null;
+    if (waypoints.length < 2) return null;
+
+    try {
+      const coords = waypoints.map((c) => `${c.lng},${c.lat}`).join(';');
+      const url = `${this.baseUrl}/route/v1/driving/${coords}?overview=full&geometries=geojson`;
+      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const data = (await res.json()) as OsrmRouteResponse;
+
+      if (data.code !== 'Ok' || data.routes.length === 0) return null;
+
+      const geom = data.routes[0].geometry;
+      if (!geom || typeof geom === 'string') return null; // không phải GeoJSON
+
+      const geoJson = geom;
+      return geoJson.coordinates.map(([lng, lat]) => [lng, lat]);
+    } catch (err) {
+      this.logger.warn(`OSRM /route (geometry) error: ${String(err)}`);
+      return null;
+    }
+  }
+
   // ─── /table ──────────────────────────────────────────────────────────
 
   /**

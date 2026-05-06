@@ -48,6 +48,41 @@ export class SolveResponseDto {
   @ApiProperty({ example: 1243, description: 'Runtime solver (ms)' })
   runtimeMs!: number;
 
+  @ApiProperty({
+    example: 300,
+    description:
+      'Phút từ 00:00 — xe shuttle rời depot (điểm lên xe khách chính)',
+  })
+  depotDepartureTime!: number;
+
+  @ApiProperty({
+    example: 504,
+    description:
+      'Phút từ 00:00 — xe shuttle về đến depot. Khách lên xe khách chính ở đây. ' +
+      'Nếu > depotEndWindow → khách lỡ chuyến.',
+  })
+  depotArrivalTime!: number;
+
+  @ApiProperty({
+    example: 400,
+    description:
+      'Phút từ 00:00 — hạn chót về depot (giờ xe khách chính khởi hành)',
+  })
+  depotEndWindow!: number;
+
   @ApiProperty({ type: [RouteStepDto] })
   steps!: RouteStepDto[];
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Polyline đường thật từ OSRM (GeoJSON LineString) — mảng [lng, lat]. ' +
+      'Null nếu OSRM không khả dụng; frontend nên fallback sang đường thẳng.',
+    example: [
+      [106.7116, 10.8163],
+      [106.712, 10.815],
+      [106.6988, 10.7793],
+    ],
+  })
+  routeGeometry?: [number, number][];
 }

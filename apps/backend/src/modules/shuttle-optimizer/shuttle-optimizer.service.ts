@@ -7,6 +7,7 @@ import { SimulatedAnnealingSolver } from './solvers/simulated-annealing.solver';
 import { AntColonySolver } from './solvers/ant-colony.solver';
 import { OrToolsSolver } from './solvers/or-tools.solver';
 import { OsrmDistanceMatrixService } from './distance/osrm-distance-matrix.service';
+import { OsrmService } from '../osrm/osrm.service';
 import { TSPTWInstance } from './models/tsptw-instance';
 import { TSPTWSolution } from './models/tsptw-solution';
 import { SolveRequestDto } from './dto/solve-request.dto';
@@ -32,6 +33,7 @@ export class ShuttleOptimizerService {
 
   constructor(
     private readonly distanceService: OsrmDistanceMatrixService,
+    private readonly osrmService: OsrmService,
     bruteForce: BruteForceSolver,
     greedy: GreedySolver,
     twoOpt: TwoOptSolver,
@@ -74,7 +76,8 @@ export class ShuttleOptimizerService {
     );
 
     const solution = await solver.solve(instance);
-    return this.toResponseDto(instance, solution);
+    const routeGeometry = await this.fetchRouteGeometry(instance, solution);
+    return this.toResponseDto(instance, solution, routeGeometry);
   }
 
   /**
@@ -96,7 +99,38 @@ export class ShuttleOptimizerService {
     );
 
     const solution = await solver.solve(instance);
-    return this.toResponseDto(instance, solution);
+    const routeGeometry = await this.fetchRouteGeometry(instance, solution);
+    return this.toResponseDto(instance, solution, routeGeometry);
+  }
+
+  /**
+   * Gọi OSRM để lấy polyline đường thật theo thứ tự ghé thăm của solution.
+   * Thứ tự waypoint: depot → customer[route[0]] → ... → customer[route[N-1]] → depot.
+   * Trả null khi OSRM không khả dụng (frontend sẽ fallback sang đường thẳng).
+   */
+  private async fetchRouteGeometry(
+    instance: TSPTWInstance,
+    solution: TSPTWSolution,
+  ): Promise<[number, number][] | undefined> {
+    if (!this.osrmService.isAvailable() || solution.route.length === 0) {
+      return undefined;
+    }
+    const waypoints = [
+      {
+        lng: instance.depot.coordinates[0],
+        lat: instance.depot.coordinates[1],
+      },
+      ...solution.route.map((idx) => ({
+        lng: instance.customers[idx].coordinates[0],
+        lat: instance.customers[idx].coordinates[1],
+      })),
+      {
+        lng: instance.depot.coordinates[0],
+        lat: instance.depot.coordinates[1],
+      },
+    ];
+    const geometry = await this.osrmService.getRouteGeometry(waypoints);
+    return geometry ?? undefined;
   }
 
   /**
@@ -130,6 +164,7 @@ export class ShuttleOptimizerService {
   private toResponseDto(
     instance: TSPTWInstance,
     solution: TSPTWSolution,
+    routeGeometry?: [number, number][],
   ): SolveResponseDto {
     const steps: RouteStepDto[] = solution.route.map((customerIdx, i) => {
       const customer = instance.customers[customerIdx];
@@ -148,6 +183,20 @@ export class ShuttleOptimizerService {
       };
     });
 
+    // Tính giờ về depot (điểm lên xe khách chính):
+    //   = giờ rời khách cuối + thời gian leg cuối từ khách cuối → depot
+    const n = solution.route.length;
+    let depotArrivalTime = instance.depotStartTime;
+    if (n > 0) {
+      const lastCustomerIdx = solution.route[n - 1];
+      const lastDeparture =
+        (solution.arrivalTimes[n - 1] ?? 0) +
+        instance.customers[lastCustomerIdx].serviceTime;
+      const lastLegDuration =
+        instance.durationMatrix[lastCustomerIdx + 1]?.[0] ?? 0;
+      depotArrivalTime = lastDeparture + lastLegDuration;
+    }
+
     return {
       solverName: solution.solverName,
       totalDistance: solution.totalDistance,
@@ -155,7 +204,11 @@ export class ShuttleOptimizerService {
       isFeasible: solution.isFeasible,
       violationCount: solution.violationCount,
       runtimeMs: solution.runtimeMs,
+      depotDepartureTime: instance.depotStartTime,
+      depotArrivalTime,
+      depotEndWindow: instance.depotEndTime,
       steps,
+      routeGeometry,
     };
   }
 }
