@@ -8,6 +8,10 @@ import { AntColonySolver } from './solvers/ant-colony.solver';
 import { OrToolsSolver } from './solvers/or-tools.solver';
 import { OsrmDistanceMatrixService } from './distance/osrm-distance-matrix.service';
 import { OsrmService } from '../osrm/osrm.service';
+import {
+  InstanceGenerator,
+  GenerateConfig,
+} from './benchmark/instance-generator';
 import { TSPTWInstance } from './models/tsptw-instance';
 import { TSPTWSolution } from './models/tsptw-solution';
 import { SolveRequestDto } from './dto/solve-request.dto';
@@ -34,6 +38,7 @@ export class ShuttleOptimizerService {
   constructor(
     private readonly distanceService: OsrmDistanceMatrixService,
     private readonly osrmService: OsrmService,
+    private readonly instanceGenerator: InstanceGenerator,
     bruteForce: BruteForceSolver,
     greedy: GreedySolver,
     twoOpt: TwoOptSolver,
@@ -96,6 +101,31 @@ export class ShuttleOptimizerService {
     const instance = await this.buildInstanceFromSeed();
     this.logger.log(
       `[DEMO] Solving N=${instance.customers.length} customers with ${solver.name}`,
+    );
+
+    const solution = await solver.solve(instance);
+    const routeGeometry = await this.fetchRouteGeometry(instance, solution);
+    return this.toResponseDto(instance, solution, routeGeometry);
+  }
+
+  /**
+   * Sinh instance ngẫu nhiên (qua InstanceGenerator) rồi giải.
+   * Phục vụ benchmark + cho UI test với N tuỳ chỉnh, seed reproducible.
+   */
+  async solveRandomInstance(
+    config: GenerateConfig,
+    solverName?: string,
+  ): Promise<SolveResponseDto> {
+    const solver = this.solvers.get(solverName ?? 'greedy-nearest-neighbor');
+    if (!solver) {
+      throw new BadRequestException(
+        `Solver '${solverName}' không tồn tại. Danh sách: ${this.listSolvers().join(', ')}`,
+      );
+    }
+
+    const instance = await this.instanceGenerator.generate(config);
+    this.logger.log(
+      `[RANDOM] Solving N=${instance.customers.length} (id=${instance.id}) with ${solver.name}`,
     );
 
     const solution = await solver.solve(instance);
@@ -204,6 +234,8 @@ export class ShuttleOptimizerService {
       isFeasible: solution.isFeasible,
       violationCount: solution.violationCount,
       runtimeMs: solution.runtimeMs,
+      depotName: instance.depot.name,
+      depotCoordinates: instance.depot.coordinates,
       depotDepartureTime: instance.depotStartTime,
       depotArrivalTime,
       depotEndWindow: instance.depotEndTime,

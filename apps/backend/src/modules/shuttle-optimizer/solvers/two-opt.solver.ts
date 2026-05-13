@@ -1,41 +1,233 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
 import { TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
+import { GreedySolver } from './greedy.solver';
+import { isLate } from '../models/time-window';
+
+/**
+ * Đánh giá 1 route — phục vụ acceptance check trong vòng lặp 2-opt.
+ */
+interface RouteEval {
+  distance: number;
+  violations: number;
+  totalDuration: number;
+  arrivalTimes: number[];
+}
 
 /**
  * 2-opt Local Search solver.
  *
- * Thuật toán:
- *   1. Bắt đầu từ nghiệm khởi tạo (thường từ GreedySolver)
- *   2. Lặp đi lặp lại:
- *      - Với mỗi cặp edge (i, i+1) và (j, j+1), thử REVERSE đoạn [i+1..j]
- *      - Nếu cải thiện → chấp nhận
- *   3. Dừng khi không còn cải thiện (local optimum)
+ * --- Thuật toán ---
  *
- * Độ phức tạp: O(N²) mỗi iteration, thường hội tụ sau vài chục iteration.
- * Chất lượng: 5-15% tệ hơn optimal cho TSP cổ điển.
+ *   1) Khởi tạo nghiệm từ GreedySolver (đảm bảo solver này luôn ≥ Greedy).
+ *   2) Vòng lặp:
+ *      Với mọi cặp chỉ số (i, j), 0 ≤ i < j ≤ N-1:
+ *        a) Đảo đoạn route[i..j] tại chỗ
+ *        b) Đánh giá lại nghiệm
+ *        c) Nếu tốt hơn → giữ; nếu không → đảo lại để revert
+ *      First-improvement: nhận chỉnh sửa đầu tiên rồi restart sweep.
+ *   3) Dừng khi 1 lượt sweep không tìm được cải thiện nào → local optimum.
  *
- * CHÚ Ý: 2-opt có thể phá vỡ time window constraint.
- * Phải check feasibility sau mỗi swap, hoặc penalty vào objective.
+ * --- Tiêu chuẩn "tốt hơn" (lex order) ---
  *
- * Vai trò:
- *   - Đứng riêng: baseline local search
- *   - Kết hợp với ACO thành ACO+LS hybrid (điểm nhấn của báo cáo)
+ *   (violations_new, distance_new)  <  (violations_old, distance_old)
  *
- * TODO: Implement (Week 2 Day 8-10).
+ *   Tức là ƯU TIÊN giảm số vi phạm trước, sau đó mới đến distance.
+ *   → Nếu greedy ra INFEASIBLE, 2-opt sẽ cố gắng "cứu" về FEASIBLE
+ *     ngay cả khi distance tăng.
+ *
+ * --- Phức tạp ---
+ *
+ *   Mỗi sweep: O(N²) cặp × O(N) re-evaluate = O(N³)
+ *   Số sweep: thường vài chục, tối đa hữu hạn (mỗi accept giảm strict)
+ *
+ *   N=10: ~1ms     N=20: ~50ms     N=50: ~5s
+ *
+ * --- Vai trò ---
+ *
+ *   - Đứng riêng: baseline local search, beat được greedy
+ *   - Là hàng phụ trong ACO + 2-opt hybrid (W3): refine top-K ant mỗi vòng
+ *
+ * --- Lưu ý quan trọng ---
+ *
+ *   2-opt CHỈ TÌM LOCAL OPTIMUM. Không đảm bảo global, không thoát được
+ *   khỏi cực tiểu cục bộ. Đó là lý do cần SA (W2) và ACO (W3) — các
+ *   thuật toán có cơ chế thoát local.
  */
 @Injectable()
 export class TwoOptSolver extends TSPTWSolver {
+  private readonly logger = new Logger(TwoOptSolver.name);
+
   readonly name = 'two-opt';
 
-  solve(
+  /** Giới hạn lượt sweep tối đa — defensive (lý thuyết luôn hữu hạn). */
+  private static readonly MAX_SWEEPS = 1000;
+
+  /** Default time limit (ms) khi config.timeLimitMs không truyền */
+  private static readonly DEFAULT_TIME_LIMIT_MS = 5000;
+
+  constructor(private readonly greedy: GreedySolver) {
+    super();
+  }
+
+  async solve(
     instance: TSPTWInstance,
     config?: SolverConfig,
   ): Promise<TSPTWSolution> {
-    void instance;
-    void config;
-    // TODO Week 2: Implement 2-opt với feasibility check
-    return Promise.resolve(emptySolution(this.name));
+    const start = Date.now();
+    const timeLimit = config?.timeLimitMs ?? TwoOptSolver.DEFAULT_TIME_LIMIT_MS;
+    const verbose = config?.verbose ?? false;
+    const n = instance.customers.length;
+
+    if (n === 0) {
+      return emptySolution(this.name);
+    }
+
+    // 1) Khởi tạo từ Greedy
+    const greedySol = await this.greedy.solve(instance);
+    const route = [...greedySol.route];
+    let evalNow = this.evaluate(route, instance);
+
+    if (n < 2) {
+      // Không có cặp (i, j) hợp lệ — trả luôn nghiệm khởi tạo
+      return this.toSolution(route, evalNow, Date.now() - start);
+    }
+
+    // 2) Vòng lặp first-improvement
+    let sweep = 0;
+    let totalAccepts = 0;
+    let improved = true;
+
+    while (improved && sweep < TwoOptSolver.MAX_SWEEPS) {
+      improved = false;
+      sweep++;
+
+      if (Date.now() - start > timeLimit) {
+        this.logger.warn(
+          `${this.name}: hit time limit ${timeLimit}ms after ${sweep} sweeps`,
+        );
+        break;
+      }
+
+      outer: for (let i = 0; i < n - 1; i++) {
+        for (let j = i + 1; j < n; j++) {
+          // Reverse in-place rồi check; nếu không tốt hơn → reverse lại
+          this.reverseSegment(route, i, j);
+          const newEval = this.evaluate(route, instance);
+
+          if (this.isBetter(newEval, evalNow)) {
+            evalNow = newEval;
+            improved = true;
+            totalAccepts++;
+            break outer; // first-improvement: thoát ngay, restart sweep
+          } else {
+            this.reverseSegment(route, i, j); // revert
+          }
+        }
+      }
+    }
+
+    if (verbose) {
+      this.logger.log(
+        `${this.name}: ${sweep} sweeps, ${totalAccepts} accepts, ` +
+          `final=(viol=${evalNow.violations}, d=${evalNow.distance.toFixed(2)}km)`,
+      );
+    }
+
+    return this.toSolution(route, evalNow, Date.now() - start);
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────
+
+  /**
+   * Đảo ngược tại chỗ đoạn `arr[lo..hi]` (cả 2 đầu mút).
+   * Gọi 2 lần liên tiếp = identity (dùng để revert sau khi check).
+   */
+  private reverseSegment(arr: number[], lo: number, hi: number): void {
+    while (lo < hi) {
+      const tmp = arr[lo];
+      arr[lo] = arr[hi];
+      arr[hi] = tmp;
+      lo++;
+      hi--;
+    }
+  }
+
+  /**
+   * Replay route từ depot để tính distance, arrival times, violations.
+   *
+   * Phải gọi mỗi lần check 2-opt move vì time window làm cho cost không
+   * tách rời được (waiting time phụ thuộc thứ tự).
+   */
+  private evaluate(route: number[], instance: TSPTWInstance): RouteEval {
+    const n = route.length;
+    if (n === 0) {
+      return {
+        distance: 0,
+        violations: 0,
+        totalDuration: 0,
+        arrivalTimes: [],
+      };
+    }
+
+    let distance = 0;
+    let violations = 0;
+    let curTime = instance.depotStartTime;
+    let lastMatrix = 0; // depot
+    const arrivalTimes: number[] = new Array<number>(n);
+
+    for (let i = 0; i < n; i++) {
+      const customerIdx = route[i];
+      const matrixIdx = customerIdx + 1;
+      const travel = instance.durationMatrix[lastMatrix][matrixIdx];
+      const arrival = curTime + travel;
+      arrivalTimes[i] = arrival;
+
+      const customer = instance.customers[customerIdx];
+      if (isLate(arrival, customer.timeWindow)) {
+        violations++;
+      }
+
+      distance += instance.distanceMatrix[lastMatrix][matrixIdx];
+      curTime =
+        Math.max(arrival, customer.timeWindow.earliest) + customer.serviceTime;
+      lastMatrix = matrixIdx;
+    }
+
+    // Leg cuối về depot
+    distance += instance.distanceMatrix[lastMatrix][0];
+    const returnTravel = instance.durationMatrix[lastMatrix][0];
+    const totalDuration = curTime + returnTravel - instance.depotStartTime;
+
+    return { distance, violations, totalDuration, arrivalTimes };
+  }
+
+  /**
+   * `a` tốt hơn `b` theo lex order (violations, distance).
+   * Tolerance 1e-9 cho distance để tránh thrashing do sai số float.
+   */
+  private isBetter(a: RouteEval, b: RouteEval): boolean {
+    if (a.violations < b.violations) return true;
+    if (a.violations > b.violations) return false;
+    return a.distance < b.distance - 1e-9;
+  }
+
+  /** Chuyển RouteEval → TSPTWSolution. */
+  private toSolution(
+    route: number[],
+    e: RouteEval,
+    runtimeMs: number,
+  ): TSPTWSolution {
+    return {
+      route: [...route],
+      totalDistance: Math.round(e.distance * 100) / 100,
+      totalDuration: Math.round(e.totalDuration * 10) / 10,
+      isFeasible: e.violations === 0,
+      violationCount: e.violations,
+      arrivalTimes: e.arrivalTimes,
+      solverName: this.name,
+      runtimeMs,
+    };
   }
 }

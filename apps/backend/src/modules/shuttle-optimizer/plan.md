@@ -63,6 +63,8 @@ N khách hàng đặt vé, mỗi khách:
 | **Solver interface** | `solvers/solver.interface.ts` | ✅ Abstract class `TSPTWSolver` + `SolverConfig` |
 | **Greedy** | `solvers/greedy.solver.ts` | ✅ **Implement đầy đủ** (Nearest Neighbor + tie-break theo waitTime) |
 | **BruteForce** | `solvers/brute-force.solver.ts` | ✅ **Held-Karp DP** + 8 unit tests pass (N ≤ 18) |
+| **InstanceGenerator** | `benchmark/instance-generator.ts` | ✅ Mulberry32 PRNG + uniform disk + 11 tests pass |
+| **TwoOpt** | `solvers/two-opt.solver.ts` | ✅ Local search, init từ Greedy, lex order (violation, distance) + 9 tests pass |
 | **Distance** | `distance/osrm-distance-matrix.service.ts` | ✅ Haversine fallback × ROAD_FACTOR 1.35 |
 | **DTO** | `dto/solve-request.dto.ts` | ✅ Customer input + optional solver |
 | | `dto/solve-response.dto.ts` | ✅ Steps + depot times + routeGeometry |
@@ -78,11 +80,11 @@ N khách hàng đặt vé, mỗi khách:
 | File | Trạng thái | Tuần |
 |---|---|---|
 | ~~`solvers/brute-force.solver.ts`~~ | ~~Stub~~ → ✅ Done | ~~W1~~ |
-| `solvers/two-opt.solver.ts` | Stub | W2 |
+| ~~`solvers/two-opt.solver.ts`~~ | ~~Stub~~ → ✅ Done | ~~W2~~ |
 | `solvers/simulated-annealing.solver.ts` | Stub | W2 |
 | `solvers/ant-colony.solver.ts` | Stub — **CORE đề tài** | W3 |
 | `solvers/or-tools.solver.ts` | Stub — chưa có Python script | W3 |
-| `benchmark/instance-generator.ts` | Stub — sinh ngẫu nhiên N customer | W1 |
+| ~~`benchmark/instance-generator.ts`~~ | ~~Stub~~ → ✅ Done | ~~W1~~ |
 | `benchmark/benchmark-runner.ts` | Stub — chạy nhiều solver × nhiều instance | W4 |
 | `shuttle-optimizer.service.ts::buildInstance()` | Throws — chưa nối DB cho `POST /solve` | W4 |
 
@@ -98,7 +100,7 @@ N khách hàng đặt vé, mỗi khách:
 | 2-3 | OsrmDistanceMatrixService với Haversine fallback | ✅ |
 | 3-4 | **Brute Force (Held-Karp DP)** với time window check | ✅ |
 | 5-6 | Greedy Nearest Neighbor solver | ✅ |
-| 7 | InstanceGenerator (random N=5..15 trong bán kính TPHCM) | ⏳ TODO |
+| 7 | InstanceGenerator (random N=5..15 trong bán kính TPHCM) | ✅ |
 | 7 | Demo seed (10 khách TPHCM thật) + endpoint `/demo` | ✅ |
 | — | UI Leaflet + map + table + OSRM polyline | ✅ (extra) |
 
@@ -108,7 +110,7 @@ N khách hàng đặt vé, mỗi khách:
 
 | Day | Task | Status |
 |---|---|---|
-| 8-10 | **2-Opt solver** — đảo cặp cạnh, feasibility check | ⏳ |
+| 8-10 | **2-Opt solver** — đảo cặp cạnh, feasibility check | ✅ |
 | 10-13 | **Simulated Annealing** — cooling schedule, reheating | ⏳ |
 | 13-14 | Unit test cho cả 2 solver, so sánh với greedy + brute-force | ⏳ |
 
@@ -260,11 +262,11 @@ Default tuned cho N=10..15 — sẽ test thử và tinh chỉnh trên instance r
 ### Cấp bách (W1 còn lại)
 
 1. ~~**BruteForceSolver**~~ — ✅ Held-Karp DP, 8 test pass
-2. **InstanceGenerator** — sinh N customer random trong radius 15km quanh depot, time window random `[depotStart + 5, depotStart + 90]` với độ rộng 30..60 phút
+2. ~~**InstanceGenerator**~~ — ✅ Mulberry32 + uniform disk, 11 test pass, controller endpoint `GET /random` với UI radio toggle
 
 ### Tuần 2
 
-3. **TwoOptSolver** — start từ greedy result, đảo cặp cạnh, accept khi `Δdistance < 0` AND vẫn feasible
+3. ~~**TwoOptSolver**~~ — ✅ init từ Greedy, lex order (violations, distance), 9 tests pass
 4. **SimulatedAnnealingSolver** — geometric cooling `T_k = T_0 × α^k` với α=0.95, accept worse với `exp(-Δ/T)`
 
 ### Tuần 3 (CORE)

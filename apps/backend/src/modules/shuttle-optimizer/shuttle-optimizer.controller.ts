@@ -1,4 +1,11 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ShuttleOptimizerService } from './shuttle-optimizer.service';
 import { SolveRequestDto } from './dto/solve-request.dto';
@@ -32,6 +39,68 @@ export class ShuttleOptimizerController {
   })
   async demo(@Query('solver') solver?: string): Promise<SolveResponseDto> {
     return this.shuttleOptimizerService.buildDemoInstance(solver);
+  }
+
+  @Get('random')
+  @ApiOperation({
+    summary: 'Sinh instance ngẫu nhiên rồi giải — phục vụ benchmark',
+    description:
+      'Sinh N customer ngẫu nhiên trong bán kính radiusKm quanh depot, ' +
+      'rồi giải bằng solver được chọn. Cùng seed → cùng instance (reproducible). ' +
+      'Phù hợp test scaling + so sánh solver trên data đa dạng.',
+  })
+  @ApiQuery({
+    name: 'n',
+    required: false,
+    description: 'Số customer (1..30). Mặc định 10',
+  })
+  @ApiQuery({
+    name: 'radius',
+    required: false,
+    description: 'Bán kính phân bố (km). Mặc định 15',
+  })
+  @ApiQuery({
+    name: 'window',
+    required: false,
+    description: 'Window width trung bình (phút). Mặc định 60',
+  })
+  @ApiQuery({
+    name: 'depotEnd',
+    required: false,
+    description: 'Hạn về depot (phút từ 00:00). Mặc định 420 (7:00)',
+  })
+  @ApiQuery({
+    name: 'seed',
+    required: false,
+    description: 'Random seed. Mặc định Date.now() (mỗi request khác nhau)',
+  })
+  @ApiQuery({
+    name: 'solver',
+    required: false,
+    description: 'Tên solver. Mặc định: greedy-nearest-neighbor',
+  })
+  async random(
+    @Query('n') n?: string,
+    @Query('radius') radius?: string,
+    @Query('window') window?: string,
+    @Query('depotEnd') depotEnd?: string,
+    @Query('seed') seed?: string,
+    @Query('solver') solver?: string,
+  ): Promise<SolveResponseDto> {
+    const customerCount = n ? parseInt(n, 10) : 10;
+    if (Number.isNaN(customerCount)) {
+      throw new BadRequestException(`n phải là số nguyên (nhận '${n}')`);
+    }
+    return this.shuttleOptimizerService.solveRandomInstance(
+      {
+        customerCount,
+        radiusKm: radius ? parseFloat(radius) : undefined,
+        windowWidthMinutes: window ? parseFloat(window) : undefined,
+        depotEndTime: depotEnd ? parseInt(depotEnd, 10) : undefined,
+        seed: seed ? parseInt(seed, 10) : undefined,
+      },
+      solver,
+    );
   }
 
   @Post('solve')

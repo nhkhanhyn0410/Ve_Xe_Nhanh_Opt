@@ -48,6 +48,15 @@ export class SolveResponseDto {
   @ApiProperty({ example: 1243, description: 'Runtime solver (ms)' })
   runtimeMs!: number;
 
+  @ApiProperty({ example: 'Bến Xe Miền Đông' })
+  depotName!: string;
+
+  @ApiProperty({
+    example: [106.7116, 10.8163],
+    description: 'Tọa độ depot [lng, lat]',
+  })
+  depotCoordinates!: [number, number];
+
   @ApiProperty({
     example: 300,
     description:

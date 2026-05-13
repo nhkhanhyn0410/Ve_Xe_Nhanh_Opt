@@ -7,6 +7,8 @@ import {
   Button,
   Card,
   Col,
+  InputNumber,
+  Radio,
   Row,
   Select,
   Space,
@@ -16,7 +18,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MapStep } from './ShuttleMap';
 
 const { Title, Text } = Typography;
@@ -46,6 +48,10 @@ interface SolveResponse {
   isFeasible: boolean;
   violationCount: number;
   runtimeMs: number;
+  /** Tên depot từ backend (DEMO_SEED hoặc instance random) */
+  depotName: string;
+  /** Tọa độ depot [lng, lat] */
+  depotCoordinates: [number, number];
   /** Phút từ 00:00 — shuttle rời depot */
   depotDepartureTime: number;
   /** Phút từ 00:00 — shuttle về depot (= điểm lên xe khách chính) */
@@ -78,15 +84,11 @@ interface Envelope<T> {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:5501/api/v1';
 
-/** Tọa độ depot demo — trùng với DEMO_SEED ở backend */
-const DEPOT_COORDS: [number, number] = [106.7116, 10.8163];
-const DEPOT_NAME = 'Bến Xe Miền Đông';
-
 /** Các solver hiện có backend đã đăng ký */
 const SOLVER_OPTIONS = [
   { label: 'Greedy — Nearest Neighbor', value: 'greedy-nearest-neighbor' },
   { label: 'Brute Force (Held-Karp)', value: 'brute-force' },
-  { label: '2-Opt Local Search', value: '2-opt' },
+  { label: '2-Opt Local Search', value: 'two-opt' },
   { label: 'Simulated Annealing', value: 'simulated-annealing' },
   { label: 'Ant Colony + 2-Opt', value: 'aco-2opt-hybrid' },
   { label: 'Google OR-Tools', value: 'or-tools' },
@@ -110,11 +112,11 @@ function buildTableRows(data: SolveResponse | null): TableRow[] {
   rows.push({
     key: 'depot-start',
     kind: 'depot-start',
-    label: `${DEPOT_NAME} (xuất phát)`,
+    label: `${data.depotName} (xuất phát)`,
     arrivalTime: 0,
     departureTime: data.depotDepartureTime,
     distanceFromPrev: 0,
-    coordinates: DEPOT_COORDS,
+    coordinates: data.depotCoordinates,
   });
 
   data.steps.forEach((s, idx) => {
@@ -132,86 +134,229 @@ function buildTableRows(data: SolveResponse | null): TableRow[] {
   rows.push({
     key: 'depot-end',
     kind: 'depot-end',
-    label: `${DEPOT_NAME} (lên xe khách chính)`,
+    label: `${data.depotName} (lên xe khách chính)`,
     arrivalTime: data.depotArrivalTime,
     departureTime: 0,
     distanceFromPrev: 0,
-    coordinates: DEPOT_COORDS,
+    coordinates: data.depotCoordinates,
     isLate: data.depotArrivalTime > data.depotEndWindow,
   });
 
   return rows;
 }
 
+/** Data source: 'demo' (DEMO_SEED 10 khách TPHCM) hoặc 'random' (sinh ngẫu nhiên) */
+type DataSource = 'demo' | 'random';
+
+interface RandomParams {
+  n: number;
+  radius: number;
+  windowWidth: number;
+  depotEnd: number;
+  seed: number;
+}
+
+const DEFAULT_RANDOM: RandomParams = {
+  n: 10,
+  radius: 15,
+  windowWidth: 60,
+  depotEnd: 420,
+  seed: 42,
+};
+
 export default function ShuttleDemoView() {
   const [solver, setSolver] = useState<string>('greedy-nearest-neighbor');
+  const [source, setSource] = useState<DataSource>('demo');
+  const [random, setRandom] = useState<RandomParams>(DEFAULT_RANDOM);
   const [data, setData] = useState<SolveResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDemo = useCallback(async (solverName: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `${API_BASE}/shuttle-optimizer/demo?solver=${encodeURIComponent(solverName)}`,
-        { method: 'GET' },
-      );
-      const json = (await res.json()) as Envelope<SolveResponse> | SolveResponse;
-      if (!res.ok) {
-        const msg =
-          'message' in json && typeof json.message === 'string'
-            ? json.message
-            : `HTTP ${res.status}`;
-        throw new Error(msg);
+  const fetchData = useCallback(
+    async (
+      solverName: string,
+      src: DataSource,
+      randomParams: RandomParams,
+    ) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const url =
+          src === 'demo'
+            ? `${API_BASE}/shuttle-optimizer/demo?solver=${encodeURIComponent(solverName)}`
+            : `${API_BASE}/shuttle-optimizer/random?` +
+              `n=${randomParams.n}&` +
+              `radius=${randomParams.radius}&` +
+              `window=${randomParams.windowWidth}&` +
+              `depotEnd=${randomParams.depotEnd}&` +
+              `seed=${randomParams.seed}&` +
+              `solver=${encodeURIComponent(solverName)}`;
+        const res = await fetch(url, { method: 'GET' });
+        const json = (await res.json()) as
+          | Envelope<SolveResponse>
+          | SolveResponse;
+        if (!res.ok) {
+          const msg =
+            'message' in json && typeof json.message === 'string'
+              ? json.message
+              : `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        const payload: SolveResponse =
+          'success' in json && json.success && 'data' in json
+            ? json.data
+            : (json as SolveResponse);
+        setData(payload);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Lỗi không xác định');
+        setData(null);
+      } finally {
+        setLoading(false);
       }
-      const payload: SolveResponse =
-        'success' in json && json.success && 'data' in json
-          ? json.data
-          : (json as SolveResponse);
-      setData(payload);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
-      setData(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
-    void fetchDemo(solver);
-  }, [solver, fetchDemo]);
+    void fetchData(solver, source, random);
+    // KHÔNG include random vào deps — chỉ refetch khi user bấm "Chạy lại"
+    // hoặc đổi solver/source.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [solver, source, fetchData]);
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div>
           <Title level={2} style={{ marginBottom: 4 }}>
-            Shuttle Optimizer — Demo 10 khách TPHCM
+            Shuttle Optimizer — TSPTW Visualizer
           </Title>
           <Text type="secondary">
-            Depot: {DEPOT_NAME}. Xe chính rời bến lúc 7:00 (phút 420) — shuttle phải
-            đón xong trước đó.
+            {data
+              ? `Depot: ${data.depotName}. Hạn về bến: ${minutesToHHMM(data.depotEndWindow)}.`
+              : 'Đang tải...'}
           </Text>
         </div>
 
         <Card>
-          <Space wrap>
-            <Text strong>Thuật toán:</Text>
-            <Select
-              style={{ minWidth: 260 }}
-              value={solver}
-              options={SOLVER_OPTIONS}
-              onChange={setSolver}
-              disabled={loading}
-            />
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={() => void fetchDemo(solver)}
-              loading={loading}
-            >
-              Chạy lại
-            </Button>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space wrap>
+              <Text strong>Thuật toán:</Text>
+              <Select
+                style={{ minWidth: 260 }}
+                value={solver}
+                options={SOLVER_OPTIONS}
+                onChange={setSolver}
+                disabled={loading}
+              />
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => void fetchData(solver, source, random)}
+                loading={loading}
+              >
+                Chạy lại
+              </Button>
+            </Space>
+
+            <Space wrap>
+              <Text strong>Nguồn data:</Text>
+              <Radio.Group
+                value={source}
+                onChange={(e) => setSource(e.target.value as DataSource)}
+                disabled={loading}
+              >
+                <Radio.Button value="demo">DEMO_SEED (10 khách TPHCM)</Radio.Button>
+                <Radio.Button value="random">Random instance</Radio.Button>
+              </Radio.Group>
+            </Space>
+
+            {source === 'random' && (
+              <Space wrap size={[16, 8]}>
+                <Space>
+                  <Text>N khách:</Text>
+                  <InputNumber
+                    min={1}
+                    max={30}
+                    value={random.n}
+                    onChange={(v) =>
+                      v !== null && setRandom({ ...random, n: v })
+                    }
+                    disabled={loading}
+                    style={{ width: 80 }}
+                  />
+                </Space>
+                <Space>
+                  <Text>Bán kính (km):</Text>
+                  <InputNumber
+                    min={1}
+                    max={50}
+                    value={random.radius}
+                    onChange={(v) =>
+                      v !== null && setRandom({ ...random, radius: v })
+                    }
+                    disabled={loading}
+                    style={{ width: 80 }}
+                  />
+                </Space>
+                <Space>
+                  <Text>Window (phút):</Text>
+                  <InputNumber
+                    min={10}
+                    max={300}
+                    step={10}
+                    value={random.windowWidth}
+                    onChange={(v) =>
+                      v !== null && setRandom({ ...random, windowWidth: v })
+                    }
+                    disabled={loading}
+                    style={{ width: 80 }}
+                  />
+                </Space>
+                <Space>
+                  <Text>Hạn depot (phút):</Text>
+                  <InputNumber
+                    min={120}
+                    max={1440}
+                    value={random.depotEnd}
+                    onChange={(v) =>
+                      v !== null && setRandom({ ...random, depotEnd: v })
+                    }
+                    disabled={loading}
+                    style={{ width: 90 }}
+                  />
+                </Space>
+                <Space>
+                  <Text>Seed:</Text>
+                  <InputNumber
+                    value={random.seed}
+                    onChange={(v) =>
+                      v !== null && setRandom({ ...random, seed: v })
+                    }
+                    disabled={loading}
+                    style={{ width: 100 }}
+                  />
+                  <Button
+                    size="small"
+                    icon={<ThunderboltOutlined />}
+                    onClick={() =>
+                      setRandom({
+                        ...random,
+                        seed: Math.floor(Math.random() * 1_000_000),
+                      })
+                    }
+                    disabled={loading}
+                    title="Random seed mới"
+                  />
+                </Space>
+                <Button
+                  type="primary"
+                  onClick={() => void fetchData(solver, 'random', random)}
+                  loading={loading}
+                >
+                  Sinh + Giải
+                </Button>
+              </Space>
+            )}
           </Space>
         </Card>
 
@@ -242,8 +387,8 @@ export default function ShuttleDemoView() {
               <div style={{ height: 510 }}>
                 {data ? (
                   <ShuttleMap
-                    depot={DEPOT_COORDS}
-                    depotName={DEPOT_NAME}
+                    depot={data.depotCoordinates}
+                    depotName={data.depotName}
                     steps={data.steps}
                     routeGeometry={data.routeGeometry}
                   />
