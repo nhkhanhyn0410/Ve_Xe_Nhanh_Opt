@@ -76,25 +76,53 @@ export class TwoOptSolver extends TSPTWSolver {
     config?: SolverConfig,
   ): Promise<TSPTWSolution> {
     const start = Date.now();
-    const timeLimit = config?.timeLimitMs ?? TwoOptSolver.DEFAULT_TIME_LIMIT_MS;
-    const verbose = config?.verbose ?? false;
     const n = instance.customers.length;
 
     if (n === 0) {
       return emptySolution(this.name);
     }
 
-    // 1) Khởi tạo từ Greedy
+    // Khởi tạo từ Greedy → delegate core logic cho refineRoute
     const greedySol = await this.greedy.solve(instance);
-    const route = [...greedySol.route];
+    return this.refineRoute(instance, greedySol.route, {
+      ...config,
+      _startTime: start,
+    });
+  }
+
+  /**
+   * Refine 1 route bất kỳ bằng 2-Opt local search.
+   *
+   * Public để các solver khác (ACO+2opt hybrid) dùng làm subroutine.
+   * Không gọi Greedy, chỉ chạy local search trên `initialRoute` truyền vào.
+   *
+   * @param instance
+   * @param initialRoute thứ tự customer 0..N-1
+   * @param options config + (internal) _startTime để tính runtime đúng khi
+   *                được wrap bởi `solve()`
+   */
+  refineRoute(
+    instance: TSPTWInstance,
+    initialRoute: readonly number[],
+    options?: SolverConfig & { _startTime?: number },
+  ): TSPTWSolution {
+    const start = options?._startTime ?? Date.now();
+    const timeLimit =
+      options?.timeLimitMs ?? TwoOptSolver.DEFAULT_TIME_LIMIT_MS;
+    const verbose = options?.verbose ?? false;
+    const n = instance.customers.length;
+
+    if (n === 0) {
+      return emptySolution(this.name);
+    }
+
+    const route = [...initialRoute];
     let evalNow = this.evaluate(route, instance);
 
     if (n < 2) {
-      // Không có cặp (i, j) hợp lệ — trả luôn nghiệm khởi tạo
       return this.toSolution(route, evalNow, Date.now() - start);
     }
 
-    // 2) Vòng lặp first-improvement
     let sweep = 0;
     let totalAccepts = 0;
     let improved = true;
@@ -104,15 +132,15 @@ export class TwoOptSolver extends TSPTWSolver {
       sweep++;
 
       if (Date.now() - start > timeLimit) {
-        this.logger.warn(
-          `${this.name}: hit time limit ${timeLimit}ms after ${sweep} sweeps`,
-        );
+        if (verbose)
+          this.logger.warn(
+            `${this.name}: hit time limit ${timeLimit}ms after ${sweep} sweeps`,
+          );
         break;
       }
 
       outer: for (let i = 0; i < n - 1; i++) {
         for (let j = i + 1; j < n; j++) {
-          // Reverse in-place rồi check; nếu không tốt hơn → reverse lại
           this.reverseSegment(route, i, j);
           const newEval = this.evaluate(route, instance);
 
@@ -120,9 +148,9 @@ export class TwoOptSolver extends TSPTWSolver {
             evalNow = newEval;
             improved = true;
             totalAccepts++;
-            break outer; // first-improvement: thoát ngay, restart sweep
+            break outer;
           } else {
-            this.reverseSegment(route, i, j); // revert
+            this.reverseSegment(route, i, j);
           }
         }
       }

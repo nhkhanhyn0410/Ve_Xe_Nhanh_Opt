@@ -65,6 +65,11 @@ N khách hàng đặt vé, mỗi khách:
 | **BruteForce** | `solvers/brute-force.solver.ts` | ✅ **Held-Karp DP** + 8 unit tests pass (N ≤ 18) |
 | **InstanceGenerator** | `benchmark/instance-generator.ts` | ✅ Mulberry32 PRNG + uniform disk + 11 tests pass |
 | **TwoOpt** | `solvers/two-opt.solver.ts` | ✅ Local search, init từ Greedy, lex order (violation, distance) + 9 tests pass |
+| **SimulatedAnnealing** | `solvers/simulated-annealing.solver.ts` | ✅ swap+reverse moves, 3 cooling schedules (geometric/linear/log), 11 tests pass |
+| **SeededRandom** | `models/seeded-random.ts` | ✅ Mulberry32 PRNG dùng chung cho generator + SA + ACO |
+| **OrTools** | `solvers/or-tools.solver.ts` + `or-tools-solver.py` | ✅ Python subprocess + Guided Local Search + soft TW + 6 tests pass |
+| **AntColony+2Opt** | `solvers/ant-colony.solver.ts` | ✅ **CORE** — MMAS variant + hybrid với TwoOpt.refineRoute, 11 tests pass |
+| **BenchmarkRunner** | `benchmark/benchmark-runner.ts` | ✅ Sweep 6 solver × N × M seed + aggregate metrics + endpoint POST /benchmark, 9 tests pass |
 | **Distance** | `distance/osrm-distance-matrix.service.ts` | ✅ Haversine fallback × ROAD_FACTOR 1.35 |
 | **DTO** | `dto/solve-request.dto.ts` | ✅ Customer input + optional solver |
 | | `dto/solve-response.dto.ts` | ✅ Steps + depot times + routeGeometry |
@@ -81,11 +86,11 @@ N khách hàng đặt vé, mỗi khách:
 |---|---|---|
 | ~~`solvers/brute-force.solver.ts`~~ | ~~Stub~~ → ✅ Done | ~~W1~~ |
 | ~~`solvers/two-opt.solver.ts`~~ | ~~Stub~~ → ✅ Done | ~~W2~~ |
-| `solvers/simulated-annealing.solver.ts` | Stub | W2 |
-| `solvers/ant-colony.solver.ts` | Stub — **CORE đề tài** | W3 |
-| `solvers/or-tools.solver.ts` | Stub — chưa có Python script | W3 |
+| ~~`solvers/simulated-annealing.solver.ts`~~ | ~~Stub~~ → ✅ Done | ~~W2~~ |
+| ~~`solvers/ant-colony.solver.ts`~~ | ~~Stub~~ → ✅ **CORE DONE** | ~~W3~~ |
+| ~~`solvers/or-tools.solver.ts`~~ | ~~Stub~~ → ✅ Done (Python subprocess) | ~~W3~~ |
 | ~~`benchmark/instance-generator.ts`~~ | ~~Stub~~ → ✅ Done | ~~W1~~ |
-| `benchmark/benchmark-runner.ts` | Stub — chạy nhiều solver × nhiều instance | W4 |
+| ~~`benchmark/benchmark-runner.ts`~~ | ~~Stub~~ → ✅ Done | ~~W4~~ |
 | `shuttle-optimizer.service.ts::buildInstance()` | Throws — chưa nối DB cho `POST /solve` | W4 |
 
 ---
@@ -111,7 +116,7 @@ N khách hàng đặt vé, mỗi khách:
 | Day | Task | Status |
 |---|---|---|
 | 8-10 | **2-Opt solver** — đảo cặp cạnh, feasibility check | ✅ |
-| 10-13 | **Simulated Annealing** — cooling schedule, reheating | ⏳ |
+| 10-13 | **Simulated Annealing** — cooling schedule, reheating | ✅ |
 | 13-14 | Unit test cho cả 2 solver, so sánh với greedy + brute-force | ⏳ |
 
 **Mốc cuối tuần 2:** 4/6 solver chạy được. Có số liệu so sánh trên 10 instance random.
@@ -120,10 +125,10 @@ N khách hàng đặt vé, mỗi khách:
 
 | Day | Task | Status |
 |---|---|---|
-| 15-17 | **Ant Colony Optimization** — pheromone matrix + ant construction | ⏳ |
-| 17-19 | **ACO + 2-Opt hybrid** — sau mỗi vòng ACO, 2-opt refine top-K best ants | ⏳ |
-| 19-20 | Tuning hyperparameter: α, β, ρ, Q, ant count, iterations | ⏳ |
-| 20-21 | **Google OR-Tools** wrapper — Python subprocess + JSON IPC | ⏳ |
+| 15-17 | **Ant Colony Optimization** — pheromone matrix + ant construction | ✅ |
+| 17-19 | **ACO + 2-Opt hybrid** — sau mỗi vòng ACO, 2-opt refine top-K best ants | ✅ |
+| 19-20 | Tuning hyperparameter: α, β, ρ, Q, ant count, iterations | ⏳ (defaults đã set) |
+| 20-21 | **Google OR-Tools** wrapper — Python subprocess + JSON IPC | ✅ |
 
 **Mốc cuối tuần 3:** Solver chính ACO-2opt hoạt động, beat được greedy + 2-opt + SA. So sánh với OR-Tools cho biết gap.
 
@@ -131,8 +136,8 @@ N khách hàng đặt vé, mỗi khách:
 
 | Day | Task | Status |
 |---|---|---|
-| 22-24 | **BenchmarkRunner** — chạy 6 solver × 30 instance × 5 seed | ⏳ |
-| 22-24 | Tính metrics: best/avg distance, runtime, optimality gap, success rate | ⏳ |
+| 22-24 | **BenchmarkRunner** — chạy 6 solver × 30 instance × 5 seed | ✅ |
+| 22-24 | Tính metrics: best/avg distance, runtime, optimality gap, success rate | ✅ |
 | 24-26 | UI mở rộng: trang `/shuttle-bench` so sánh kết quả các solver | ⏳ |
 | 26-27 | Charts: convergence curve cho ACO/SA, bar chart distance, runtime | ⏳ |
 | 27-28 | Viết báo cáo + slide trình bày | ⏳ |
@@ -267,7 +272,7 @@ Default tuned cho N=10..15 — sẽ test thử và tinh chỉnh trên instance r
 ### Tuần 2
 
 3. ~~**TwoOptSolver**~~ — ✅ init từ Greedy, lex order (violations, distance), 9 tests pass
-4. **SimulatedAnnealingSolver** — geometric cooling `T_k = T_0 × α^k` với α=0.95, accept worse với `exp(-Δ/T)`
+4. ~~**SimulatedAnnealingSolver**~~ — ✅ 3 cooling schedules, scalar cost với violation penalty, 11 tests pass
 
 ### Tuần 3 (CORE)
 

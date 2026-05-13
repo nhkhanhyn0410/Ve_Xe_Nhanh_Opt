@@ -10,12 +10,18 @@ import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { ShuttleOptimizerService } from './shuttle-optimizer.service';
 import { SolveRequestDto } from './dto/solve-request.dto';
 import { SolveResponseDto } from './dto/solve-response.dto';
+import {
+  BenchmarkConfig,
+  BenchmarkReport,
+  BenchmarkRunner,
+} from './benchmark/benchmark-runner';
 
 @ApiTags('Shuttle Optimizer')
 @Controller('shuttle-optimizer')
 export class ShuttleOptimizerController {
   constructor(
     private readonly shuttleOptimizerService: ShuttleOptimizerService,
+    private readonly benchmarkRunner: BenchmarkRunner,
   ) {}
 
   @Get('solvers')
@@ -111,5 +117,19 @@ export class ShuttleOptimizerController {
   })
   async solve(@Body() dto: SolveRequestDto): Promise<SolveResponseDto> {
     return this.shuttleOptimizerService.solve(dto);
+  }
+
+  @Post('benchmark')
+  @ApiOperation({
+    summary: 'Chạy benchmark batch — 6 solver × N instance × M seed',
+    description:
+      'Sinh instance ngẫu nhiên cho từng N trong sizes, từng seed trong seeds, ' +
+      'rồi chạy mọi solver trong solverNames trên cùng instance. ' +
+      'Trả về aggregates (mean/median/std distance, runtime, optimality gap, feasibility rate). ' +
+      'Mặc định: sizes=[5,8,10,12], seeds=[1..5], solvers=tất cả. ' +
+      'Có thể mất vài phút khi N lớn — đặt time limit cho solver qua solverConfig.timeLimitMs.',
+  })
+  async benchmark(@Body() body: BenchmarkConfig): Promise<BenchmarkReport> {
+    return this.benchmarkRunner.runConfig(body);
   }
 }
