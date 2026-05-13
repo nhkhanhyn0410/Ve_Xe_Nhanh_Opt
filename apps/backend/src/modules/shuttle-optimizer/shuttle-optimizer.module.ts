@@ -10,6 +10,7 @@ import { AntColonySolver } from './solvers/ant-colony.solver';
 import { OrToolsSolver } from './solvers/or-tools.solver';
 import { BenchmarkRunner } from './benchmark/benchmark-runner';
 import { InstanceGenerator } from './benchmark/instance-generator';
+import { AcoTuner } from './benchmark/aco-tuner';
 
 /**
  * Module tối ưu lộ trình xe shuttle.
@@ -37,6 +38,7 @@ import { InstanceGenerator } from './benchmark/instance-generator';
     // Benchmark tools
     BenchmarkRunner,
     InstanceGenerator,
+    AcoTuner,
   ],
   exports: [ShuttleOptimizerService],
 })

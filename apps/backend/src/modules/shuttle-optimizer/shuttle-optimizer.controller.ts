@@ -15,6 +15,7 @@ import {
   BenchmarkReport,
   BenchmarkRunner,
 } from './benchmark/benchmark-runner';
+import { AcoTuner, AcoTuneConfig, AcoTuneReport } from './benchmark/aco-tuner';
 
 @ApiTags('Shuttle Optimizer')
 @Controller('shuttle-optimizer')
@@ -22,6 +23,7 @@ export class ShuttleOptimizerController {
   constructor(
     private readonly shuttleOptimizerService: ShuttleOptimizerService,
     private readonly benchmarkRunner: BenchmarkRunner,
+    private readonly acoTuner: AcoTuner,
   ) {}
 
   @Get('solvers')
@@ -117,6 +119,19 @@ export class ShuttleOptimizerController {
   })
   async solve(@Body() dto: SolveRequestDto): Promise<SolveResponseDto> {
     return this.shuttleOptimizerService.solve(dto);
+  }
+
+  @Post('tune-aco')
+  @ApiOperation({
+    summary: 'Grid Search hyperparameter cho ACO (α × β × ρ)',
+    description:
+      'Tune ACO trên N customer cố định × M seed × |α| × |β| × |ρ| configs. ' +
+      'Mỗi config chạy M ACO + so với reference (BF nếu N ≤ 12, else OR-Tools) để tính gap. ' +
+      'Default: N=10, seeds=[1..5], α∈[0.5,1,2], β∈[2,3,5], ρ∈[0.1,0.2] → 18 configs × 5 seeds = 90 runs ACO. ' +
+      'Có thể mất vài phút. Trả về results sorted theo avgGap asc.',
+  })
+  async tuneAco(@Body() body: AcoTuneConfig): Promise<AcoTuneReport> {
+    return this.acoTuner.tune(body);
   }
 
   @Post('benchmark')
