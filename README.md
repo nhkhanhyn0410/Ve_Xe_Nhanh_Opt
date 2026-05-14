@@ -128,21 +128,28 @@ npm run dev:frontend
 
 ### 8.5 Chạy bằng Docker
 
+Docker chỉ dùng để chạy các dịch vụ hạ tầng phụ trợ:
+
 ```bash
 npm run docker:dev
 ```
 
-Lệnh này build và chạy toàn bộ stack:
+Các URL của stack Docker:
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5501/api/v1
-- Swagger: http://localhost:5501/api/docs
 - Mongo Express: http://localhost:8082
+- MongoDB: mongodb://localhost:27018
+- Redis: localhost:6380
+- OSRM: http://localhost:5001
+
+Backend và frontend chạy trực tiếp trên máy:
+
+```bash
+npm run dev
+```
 
 Các lệnh Docker thường dùng:
 
 ```bash
-npm run docker:build
 npm run docker:logs
 npm run docker:down
 ```
