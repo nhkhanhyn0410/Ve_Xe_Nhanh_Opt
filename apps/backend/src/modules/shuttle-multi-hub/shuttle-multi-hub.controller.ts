@@ -1,4 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Post, Query } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { MultiHubMode } from './models/vrptw-instance';
 import { SolveMultiHubRequestDto } from './dto/solve-request.dto';
@@ -24,9 +31,21 @@ export class ShuttleMultiHubController {
   @ApiQuery({ name: 'mode', required: false, enum: ['vrptw', 'mdvrptw'] })
   @ApiQuery({ name: 'n', required: false, description: 'Customer count' })
   @ApiQuery({ name: 'vehicles', required: false, description: 'Vehicle count' })
-  @ApiQuery({ name: 'radius', required: false, description: 'Cluster radius km' })
-  @ApiQuery({ name: 'window', required: false, description: 'Time-window width minutes' })
-  @ApiQuery({ name: 'depotEnd', required: false, description: 'Depot latest arrival time' })
+  @ApiQuery({
+    name: 'radius',
+    required: false,
+    description: 'Cluster radius km',
+  })
+  @ApiQuery({
+    name: 'window',
+    required: false,
+    description: 'Time-window width minutes',
+  })
+  @ApiQuery({
+    name: 'depotEnd',
+    required: false,
+    description: 'Depot latest arrival time',
+  })
   @ApiQuery({ name: 'seed', required: false })
   @ApiQuery({ name: 'solver', required: false })
   async demo(

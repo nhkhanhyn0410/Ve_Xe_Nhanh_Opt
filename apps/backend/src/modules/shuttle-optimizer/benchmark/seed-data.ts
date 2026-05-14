@@ -28,7 +28,7 @@ export const DEMO_SEED: Omit<
   endDepot: {
     id: 'depot-bxmd',
     name: 'Bến Xe Miền Đông',
-    coordinates: [10.880216, 106.815484],
+    coordinates: [106.815484, 10.880216],
     serviceTime: 0,
     timeWindow: { earliest: 300, latest: 420 },
   },

@@ -36,7 +36,7 @@ export interface GenerateConfig {
 /**
  * Default depot — Bến Xe Miền Đông, TPHCM.
  */
-const DEFAULT_DEPOT_CENTER: [number, number] = [10.880216, 106.815484];
+const DEFAULT_DEPOT_CENTER: [number, number] = [106.815484, 10.880216];
 
 /**
  * Xấp xỉ km/độ — đủ cho bán kính nhỏ (< 50km) trong vùng nhiệt đới.
