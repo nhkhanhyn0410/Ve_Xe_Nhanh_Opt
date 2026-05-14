@@ -35,7 +35,7 @@ export class MultiHubDepotDto {
   @IsString()
   name!: string;
 
-  @ApiProperty({ example: [106.7116, 10.8163], description: '[lng, lat]' })
+  @ApiProperty({ example: [10.880216, 106.815484], description: '[lng, lat]' })
   @IsArray()
   coordinates!: [number, number];
 
