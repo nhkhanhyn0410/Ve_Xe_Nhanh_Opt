@@ -5,6 +5,7 @@ import {
   MultiHubGenerateConfig,
   MultiHubInstanceGenerator,
 } from './benchmark/instance-generator';
+import { buildSeedInstance } from './benchmark/seed-data';
 import { SolveMultiHubRequestDto } from './dto/solve-request.dto';
 import {
   MultiHubSolveResponseDto,
@@ -53,6 +54,18 @@ export class ShuttleMultiHubService {
     solverName?: string,
   ): Promise<MultiHubSolveResponseDto> {
     const instance = await this.generator.generate(config);
+    return this.solveInstance(instance, solverName);
+  }
+
+  /**
+   * Giải instance từ seed data CỐ ĐỊNH (không random).
+   * Dùng để demo ổn định + debug solver (cùng input → cùng output mọi lần).
+   */
+  async solveSeed(
+    mode: MultiHubMode,
+    solverName?: string,
+  ): Promise<MultiHubSolveResponseDto> {
+    const instance = await buildSeedInstance(mode, this.distanceService);
     return this.solveInstance(instance, solverName);
   }
 

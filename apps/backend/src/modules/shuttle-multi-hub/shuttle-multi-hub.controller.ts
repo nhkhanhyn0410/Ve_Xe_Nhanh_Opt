@@ -23,6 +23,24 @@ export class ShuttleMultiHubController {
     return { solvers: this.service.listSolvers() };
   }
 
+  @Get('seed')
+  @ApiOperation({
+    summary:
+      'Solve a fixed seed instance (10 real TPHCM customers, 2 hubs) — reproducible, no random',
+    description:
+      'Cụm tây 5 khách quanh BXMT + cụm đông 5 khách quanh BXMĐ. ' +
+      'Same input every call → dùng để debug solver hoặc demo ổn định.',
+  })
+  @ApiQuery({ name: 'mode', required: false, enum: ['vrptw', 'mdvrptw'] })
+  @ApiQuery({ name: 'solver', required: false })
+  async seed(
+    @Query('mode') mode?: string,
+    @Query('solver') solver?: string,
+  ): Promise<MultiHubSolveResponseDto> {
+    const parsedMode = parseMode(mode);
+    return this.service.solveSeed(parsedMode, solver);
+  }
+
   @Get('demo')
   @ApiOperation({
     summary:

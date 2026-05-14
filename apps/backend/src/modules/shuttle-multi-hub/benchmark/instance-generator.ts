@@ -23,7 +23,7 @@ export interface MultiHubGenerateConfig {
 }
 
 export const HUB_BXMT: [number, number] = [106.6232, 10.7411];
-export const HUB_BXMD: [number, number] = [106.7116, 10.8163];
+export const HUB_BXMD: [number, number] = [106.815484, 10.880216];
 
 const KM_PER_DEGREE_LAT = 110.574;
 const VEHICLE_COLORS = ['#2563eb', '#7c3aed', '#0891b2', '#ea580c'];

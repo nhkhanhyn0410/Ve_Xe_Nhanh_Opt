@@ -10,7 +10,7 @@ import 'leaflet/dist/leaflet.css';
  * Tuyến chính: BXMT → BXMĐ → ra Hà Nội.
  */
 export const HUB_BXMT: [number, number] = [106.6232, 10.7411]; // Bến Xe Miền Tây
-export const HUB_BXMD: [number, number] = [106.7116, 10.8163]; // Bến Xe Miền Đông
+export const HUB_BXMD: [number, number] = [106.815484, 10.880216]; // Bến Xe Miền Đông
 
 export interface MapStep {
   customerId: string;
