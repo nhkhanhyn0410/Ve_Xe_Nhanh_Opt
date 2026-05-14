@@ -16,6 +16,7 @@ import {
 } from '@nestjs/swagger';
 import { BookingQuery, BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { MongoIdPipe } from '@common/pipes/mongo-id.pipe';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '@common/guards/roles.guard';
@@ -35,7 +36,13 @@ export class BookingsController {
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Admin/Nhà Xe] Xem danh sách đơn đặt vé' })
   @ApiQuery({ name: 'userId', required: false })
-  @ApiQuery({ name: 'status', required: false, enum: BookingStatus })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: BookingStatus,
+    enumName: 'BookingStatus',
+    type: String,
+  })
   async findAll(@Query() query: BookingQuery) {
     const data = await this.bookingsService.findAll(query);
     return { success: true, data };
@@ -84,12 +91,12 @@ export class BookingsController {
   @ApiOperation({ summary: 'Cập nhật trạng thái Booking (Thanh toán/Hủy)' })
   async updateStatus(
     @Param('id', MongoIdPipe) id: string,
-    @Body('status') status: BookingStatus,
+    @Body() updateStatusDto: UpdateBookingStatusDto,
     @CurrentUser() user: JwtPayload,
   ) {
     const data = await this.bookingsService.updateStatus(
       id,
-      status,
+      updateStatusDto.status,
       user.sub,
       user.role,
     );
