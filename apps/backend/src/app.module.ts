@@ -18,6 +18,7 @@ import { OsrmModule } from './modules/osrm/osrm.module';
 import { BookingsModule } from '@modules/bookings/bookings.module';
 import { SearchModule } from './modules/search/search.module';
 import { ShuttleOptimizerModule } from './modules/shuttle-optimizer/shuttle-optimizer.module';
+import { ShuttleMultiHubModule } from './modules/shuttle-multi-hub/shuttle-multi-hub.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ShuttleOptimizerModule } from './modules/shuttle-optimizer/shuttle-opti
     BookingsModule,
     SearchModule,
     ShuttleOptimizerModule,
+    ShuttleMultiHubModule,
   ],
   controllers: [AppController],
   providers: [AppService],

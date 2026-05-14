@@ -1,13 +1,27 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Alert, Card, Space, Spin, Tag, Typography } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Col,
+  InputNumber,
+  Radio,
+  Row,
+  Space,
+  Spin,
+  Statistic,
+  Table,
+  Tag,
+  Typography,
+} from 'antd';
+import { ReloadOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import type { MapStep, ShuttleBranch } from './ShuttleMultiHubMap';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
-/** Leaflet phải client-only, không SSR */
 const ShuttleMultiHubMap = dynamic(() => import('./ShuttleMultiHubMap'), {
   ssr: false,
   loading: () => (
@@ -24,104 +38,475 @@ const ShuttleMultiHubMap = dynamic(() => import('./ShuttleMultiHubMap'), {
   ),
 });
 
-/**
- * TRANG NÀY = nơi tiếp nhận update cho scenario "2 cụm khách + tuyến chính".
- *
- * HIỆN TẠI là skeleton:
- *   - Map đã có RED LINE tuyến chính BXMT ↔ BXMĐ + 2 hub markers
- *   - `branches` ban đầu là empty → map chỉ hiện red line + 2 hub
- *
- * KHI QUYẾT ĐỊNH SCENARIO, bổ sung phần fetch + state vào đây:
- *
- *   Scenario A (2 TSPTW độc lập):
- *     - Fetch GET /shuttle-optimizer/random với 2 depot khác nhau
- *     - Push 2 ShuttleBranch vào state với màu phân biệt (xanh + tím)
- *
- *   Scenario B (1 VRPTW):
- *     - Backend cần thêm endpoint mới (VRPTW solver)
- *     - Parse response → split thành 2 ShuttleBranch theo vehicle index
- *
- *   Scenario C (MDVRPTW):
- *     - Backend cần multi-depot solver
- *     - Parse → mỗi branch là 1 (hub, vehicle, customers) tuple
- */
+type MultiHubMode = 'vrptw' | 'mdvrptw';
+
+interface Envelope<T> {
+  success: boolean;
+  data: T;
+}
+
+interface MultiHubStep extends MapStep {
+  timeWindow: [number, number];
+}
+
+interface MultiHubRoute {
+  vehicleId: string;
+  vehicleName: string;
+  color: string;
+  depotName: string;
+  depotCoordinates: [number, number];
+  endDepotName: string;
+  endDepotCoordinates: [number, number];
+  customerCount: number;
+  load: number;
+  totalDistance: number;
+  totalDuration: number;
+  depotArrivalTime: number;
+  isFeasible: boolean;
+  violationCount: number;
+  steps: MultiHubStep[];
+  routeGeometry?: [number, number][];
+}
+
+interface MultiHubResponse {
+  solverName: string;
+  mode: MultiHubMode;
+  depotCount: number;
+  vehicleCount: number;
+  customerCount: number;
+  totalDistance: number;
+  totalDuration: number;
+  isFeasible: boolean;
+  violationCount: number;
+  runtimeMs: number;
+  unassignedCustomerIds: string[];
+  routes: MultiHubRoute[];
+}
+
+interface DemoParams {
+  mode: MultiHubMode;
+  customerCount: number;
+  vehicleCount: number;
+  radiusKm: number;
+  windowWidth: number;
+  depotEnd: number;
+  seed: number;
+}
+
+interface RouteTableRow {
+  key: string;
+  vehicleName: string;
+  hub: string;
+  stops: number;
+  load: number;
+  totalDistance: number;
+  totalDuration: number;
+  depotArrivalTime: number;
+  violationCount: number;
+  isFeasible: boolean;
+}
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:5501/api/v1';
+
+const DEFAULT_PARAMS: DemoParams = {
+  mode: 'mdvrptw',
+  customerCount: 14,
+  vehicleCount: 2,
+  radiusKm: 7,
+  windowWidth: 55,
+  depotEnd: 430,
+  seed: 42,
+};
+
+function minutesToHHMM(min: number): string {
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function toBranches(data: MultiHubResponse | null): ShuttleBranch[] {
+  if (!data) return [];
+  return data.routes.map((route) => ({
+    depot: route.depotCoordinates,
+    depotName: route.depotName,
+    endDepot: route.endDepotCoordinates,
+    endDepotName: route.endDepotName,
+    vehicleName: route.vehicleName,
+    steps: route.steps,
+    routeGeometry: route.routeGeometry,
+    color: route.color,
+  }));
+}
+
+function toRouteRows(data: MultiHubResponse | null): RouteTableRow[] {
+  if (!data) return [];
+  return data.routes.map((route) => ({
+    key: route.vehicleId,
+    vehicleName: route.vehicleName,
+    hub:
+      route.depotName === route.endDepotName
+        ? route.depotName
+        : `${route.depotName} → ${route.endDepotName}`,
+    stops: route.customerCount,
+    load: route.load,
+    totalDistance: route.totalDistance,
+    totalDuration: route.totalDuration,
+    depotArrivalTime: route.depotArrivalTime,
+    violationCount: route.violationCount,
+    isFeasible: route.isFeasible,
+  }));
+}
+
 export default function ShuttleMultiHubView() {
-  // State để chứa các branch shuttle — hiện rỗng vì chưa có scenario nào được wire
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [branches, _setBranches] = useState<ShuttleBranch[]>([]);
+  const [params, setParams] = useState<DemoParams>(DEFAULT_PARAMS);
+  const [data, setData] = useState<MultiHubResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = useCallback(async (nextParams: DemoParams) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const query = new URLSearchParams({
+        mode: nextParams.mode,
+        n: String(nextParams.customerCount),
+        vehicles: String(nextParams.vehicleCount),
+        radius: String(nextParams.radiusKm),
+        window: String(nextParams.windowWidth),
+        depotEnd: String(nextParams.depotEnd),
+        seed: String(nextParams.seed),
+      });
+      const res = await fetch(`${API_BASE}/shuttle-multi-hub/demo?${query}`, {
+        method: 'GET',
+      });
+      const json = (await res.json()) as
+        | Envelope<MultiHubResponse>
+        | MultiHubResponse;
+      if (!res.ok) {
+        const msg =
+          'message' in json && typeof json.message === 'string'
+            ? json.message
+            : `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      const payload =
+        'success' in json && json.success && 'data' in json
+          ? json.data
+          : (json as MultiHubResponse);
+      setData(payload);
+    } catch (e) {
+      setData(null);
+      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchData(DEFAULT_PARAMS);
+  }, [fetchData]);
+
+  const branches = useMemo(() => toBranches(data), [data]);
+  const routeRows = useMemo(() => toRouteRows(data), [data]);
 
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
         <div>
           <Title level={2} style={{ marginBottom: 4 }}>
-            Shuttle Multi-Hub — Tuyến chính 2 bến
+            Shuttle Multi-Hub — VRPTW / MDVRPTW
           </Title>
           <Text type="secondary">
-            Bến Xe Miền Tây → Bến Xe Miền Đông → Hà Nội.
-            <br />
-            Mỗi bến có 1 cụm khách cần shuttle đón đến đúng giờ xe chính ghé qua.
+            {data
+              ? `${data.solverName} · ${data.customerCount} khách · ${data.vehicleCount} xe · ${data.depotCount} depot`
+              : 'Đang tải dữ liệu mô phỏng...'}
           </Text>
         </div>
 
-        <Alert
-          type="info"
-          showIcon
-          message="Đây là trang skeleton — chờ bạn quyết định scenario để wire data"
-          description={
-            <Paragraph style={{ marginBottom: 0 }}>
-              Bạn có thể chọn 1 trong 3 hướng:
-              <ul style={{ marginTop: 8, marginBottom: 0 }}>
-                <li>
-                  <Tag color="blue">Scenario A</Tag>
-                  <b>2 TSPTW độc lập</b> — mỗi bến 1 shuttle riêng. Dùng được solver hiện có.
-                </li>
-                <li>
-                  <Tag color="purple">Scenario B</Tag>
-                  <b>1 VRPTW</b> — 1 bến có 2 shuttle phân công khách. Cần upgrade solver.
-                </li>
-                <li>
-                  <Tag color="magenta">Scenario C</Tag>
-                  <b>MDVRPTW</b> — khách chọn bến tùy ý + nhiều shuttle. Cần upgrade nhiều hơn.
-                </li>
-              </ul>
-            </Paragraph>
-          }
-        />
+        <Card>
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space wrap>
+              <Text strong>Mô hình:</Text>
+              <Radio.Group
+                value={params.mode}
+                onChange={(e) =>
+                  setParams({
+                    ...params,
+                    mode: e.target.value as MultiHubMode,
+                  })
+                }
+                disabled={loading}
+              >
+                <Radio.Button value="vrptw">VRPTW thuần</Radio.Button>
+                <Radio.Button value="mdvrptw">MDVRPTW</Radio.Button>
+              </Radio.Group>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => void fetchData(params)}
+                loading={loading}
+              >
+                Chạy solver
+              </Button>
+            </Space>
 
-        <Card
-          title="Bản đồ tuyến chính + shuttle (preview)"
-          styles={{ body: { padding: 0 } }}
-          style={{ height: 600, overflow: 'hidden' }}
-        >
-          <div style={{ height: 550 }}>
-            <ShuttleMultiHubMap branches={branches} />
-          </div>
+            <Space wrap size={[16, 8]}>
+              <Space>
+                <Text>Khách:</Text>
+                <InputNumber
+                  min={2}
+                  max={40}
+                  value={params.customerCount}
+                  onChange={(value) =>
+                    value !== null &&
+                    setParams({ ...params, customerCount: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 80 }}
+                />
+              </Space>
+              <Space>
+                <Text>Xe:</Text>
+                <InputNumber
+                  min={1}
+                  max={6}
+                  value={params.vehicleCount}
+                  onChange={(value) =>
+                    value !== null &&
+                    setParams({ ...params, vehicleCount: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 80 }}
+                />
+              </Space>
+              <Space>
+                <Text>Bán kính (km):</Text>
+                <InputNumber
+                  min={2}
+                  max={25}
+                  value={params.radiusKm}
+                  onChange={(value) =>
+                    value !== null && setParams({ ...params, radiusKm: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 80 }}
+                />
+              </Space>
+              <Space>
+                <Text>Window:</Text>
+                <InputNumber
+                  min={20}
+                  max={180}
+                  step={5}
+                  value={params.windowWidth}
+                  onChange={(value) =>
+                    value !== null &&
+                    setParams({ ...params, windowWidth: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 80 }}
+                />
+              </Space>
+              <Space>
+                <Text>Hạn depot:</Text>
+                <InputNumber
+                  min={360}
+                  max={720}
+                  value={params.depotEnd}
+                  onChange={(value) =>
+                    value !== null && setParams({ ...params, depotEnd: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 90 }}
+                />
+              </Space>
+              <Space>
+                <Text>Seed:</Text>
+                <InputNumber
+                  value={params.seed}
+                  onChange={(value) =>
+                    value !== null && setParams({ ...params, seed: value })
+                  }
+                  disabled={loading}
+                  style={{ width: 100 }}
+                />
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  onClick={() =>
+                    setParams({
+                      ...params,
+                      seed: Math.floor(Math.random() * 1_000_000),
+                    })
+                  }
+                  disabled={loading}
+                  title="Random seed mới"
+                />
+              </Space>
+            </Space>
+          </Space>
         </Card>
 
-        <Card title="Ghi chú thiết kế">
-          <Paragraph>
-            <b>Red line trên map</b>: tuyến xe khách chính BXMT → BXMĐ (dashed).
-            Đây là cố định trong UI, không phải kết quả thuật toán.
-          </Paragraph>
-          <Paragraph>
-            <b>Marker `T` đỏ</b>: Bến Xe Miền Tây. <b>Marker `Đ` đỏ</b>: Bến Xe
-            Miền Đông.
-          </Paragraph>
-          <Paragraph>
-            <b>Khi wire data</b>: state <code>branches</code> sẽ chứa các shuttle
-            (mỗi cái có depot + list khách + màu riêng). Map tự render polyline +
-            numbered markers cho từng branch.
-          </Paragraph>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            Tham khảo type <code>ShuttleBranch</code> trong{' '}
-            <code>ShuttleMultiHubMap.tsx</code>.
-          </Paragraph>
+        {error && (
+          <Alert
+            type="error"
+            showIcon
+            message="Không gọi được API /shuttle-multi-hub/demo"
+            description={
+              <>
+                <div>{error}</div>
+                <Text type="secondary">
+                  Kiểm tra backend đang chạy tại {API_BASE}.
+                </Text>
+              </>
+            }
+          />
+        )}
+
+        <Row gutter={[16, 16]}>
+          <Col xs={24} lg={16}>
+            <Card
+              title="Bản đồ tuyến chính + route shuttle"
+              styles={{ body: { padding: 0 } }}
+              style={{ height: 600, overflow: 'hidden' }}
+            >
+              <div style={{ height: 550 }}>
+                {branches.length > 0 ? (
+                  <ShuttleMultiHubMap branches={branches} />
+                ) : (
+                  <div
+                    style={{
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Spin tip={loading ? 'Đang giải...' : 'Chưa có dữ liệu'} />
+                  </div>
+                )}
+              </div>
+            </Card>
+          </Col>
+
+          <Col xs={24} lg={8}>
+            <Card title="Kết quả" style={{ height: 600, overflow: 'auto' }}>
+              {data ? (
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  <Statistic title="Solver" value={data.solverName} />
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Statistic
+                        title="Tổng quãng (km)"
+                        value={data.totalDistance}
+                        precision={2}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Statistic
+                        title="Runtime (ms)"
+                        value={data.runtimeMs}
+                      />
+                    </Col>
+                  </Row>
+                  <Row gutter={12}>
+                    <Col span={12}>
+                      <Statistic
+                        title="Tổng thời gian"
+                        value={data.totalDuration}
+                        precision={1}
+                      />
+                    </Col>
+                    <Col span={12}>
+                      <Statistic
+                        title="Vi phạm"
+                        value={data.violationCount}
+                        valueStyle={{
+                          color: data.violationCount > 0 ? '#cf1322' : '#3f8600',
+                        }}
+                      />
+                    </Col>
+                  </Row>
+                  <Space wrap>
+                    <Tag color={data.mode === 'mdvrptw' ? 'purple' : 'blue'}>
+                      {data.mode.toUpperCase()}
+                    </Tag>
+                    <Tag color={data.isFeasible ? 'green' : 'red'}>
+                      {data.isFeasible ? 'FEASIBLE' : 'INFEASIBLE'}
+                    </Tag>
+                    {data.unassignedCustomerIds.length > 0 && (
+                      <Tag color="red">
+                        Unassigned: {data.unassignedCustomerIds.length}
+                      </Tag>
+                    )}
+                  </Space>
+                </Space>
+              ) : (
+                <Text type="secondary">Chưa có kết quả.</Text>
+              )}
+            </Card>
+          </Col>
+        </Row>
+
+        <Card title="Route theo xe">
+          <Table<RouteTableRow>
+            size="small"
+            rowKey="key"
+            dataSource={routeRows}
+            pagination={false}
+            loading={loading}
+            columns={[
+              {
+                title: 'Xe',
+                dataIndex: 'vehicleName',
+                render: (name: string, row) => (
+                  <Space>
+                    <Text strong>{name}</Text>
+                    <Tag color={row.isFeasible ? 'green' : 'red'}>
+                      {row.violationCount}
+                    </Tag>
+                  </Space>
+                ),
+              },
+              {
+                title: 'Depot',
+                dataIndex: 'hub',
+              },
+              {
+                title: 'Stops',
+                dataIndex: 'stops',
+                width: 80,
+              },
+              {
+                title: 'Load',
+                dataIndex: 'load',
+                width: 80,
+              },
+              {
+                title: 'Quãng (km)',
+                dataIndex: 'totalDistance',
+                render: (v: number) => v.toFixed(2),
+                width: 110,
+              },
+              {
+                title: 'Thời gian',
+                dataIndex: 'totalDuration',
+                render: (v: number) => v.toFixed(1),
+                width: 100,
+              },
+              {
+                title: 'Về depot',
+                dataIndex: 'depotArrivalTime',
+                render: (v: number) => minutesToHHMM(v),
+                width: 100,
+              },
+            ]}
+          />
         </Card>
       </Space>
     </div>
   );
 }
 
-// Re-export để consumer code dễ import
 export type { MapStep, ShuttleBranch };

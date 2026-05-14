@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { Fragment, useEffect, useMemo } from 'react';
 import {
   MapContainer,
   TileLayer,
@@ -36,6 +36,7 @@ export interface ShuttleBranch {
   depotName: string;
   endDepot?: [number, number];
   endDepotName?: string;
+  vehicleName?: string;
   steps: MapStep[];
   /** Polyline đường thật từ OSRM nếu có. */
   routeGeometry?: [number, number][];
@@ -179,7 +180,7 @@ export default function ShuttleMultiHubMap({
               })();
 
         return (
-          <div key={`branch-${branchIdx}`}>
+          <Fragment key={`branch-${branchIdx}`}>
             {/* Shuttle polyline */}
             <Polyline
               positions={shuttleLatLngs}
@@ -209,7 +210,8 @@ export default function ShuttleMultiHubMap({
                 <Popup>
                   <div style={{ minWidth: 180 }}>
                     <strong>
-                      [{br.depotName}] #{idx + 1} — {s.customerName}
+                      [{br.vehicleName ?? br.depotName}] #{idx + 1} —{' '}
+                      {s.customerName}
                     </strong>
                     <br />
                     Đến: <b>{minutesToHHMM(s.arrivalTime)}</b>
@@ -221,7 +223,7 @@ export default function ShuttleMultiHubMap({
                 </Popup>
               </Marker>
             ))}
-          </div>
+          </Fragment>
         );
       })}
 
@@ -231,7 +233,8 @@ export default function ShuttleMultiHubMap({
 }
 
 function minutesToHHMM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
