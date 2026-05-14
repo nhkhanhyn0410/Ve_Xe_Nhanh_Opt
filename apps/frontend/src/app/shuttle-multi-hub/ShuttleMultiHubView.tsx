@@ -39,6 +39,7 @@ const ShuttleMultiHubMap = dynamic(() => import('./ShuttleMultiHubMap'), {
 });
 
 type MultiHubMode = 'vrptw' | 'mdvrptw';
+type DataSource = 'seed' | 'random';
 
 interface Envelope<T> {
   success: boolean;
@@ -160,53 +161,64 @@ function toRouteRows(data: MultiHubResponse | null): RouteTableRow[] {
 }
 
 export default function ShuttleMultiHubView() {
+  const [source, setSource] = useState<DataSource>('seed');
   const [params, setParams] = useState<DemoParams>(DEFAULT_PARAMS);
   const [data, setData] = useState<MultiHubResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = useCallback(async (nextParams: DemoParams) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const query = new URLSearchParams({
-        mode: nextParams.mode,
-        n: String(nextParams.customerCount),
-        vehicles: String(nextParams.vehicleCount),
-        radius: String(nextParams.radiusKm),
-        window: String(nextParams.windowWidth),
-        depotEnd: String(nextParams.depotEnd),
-        seed: String(nextParams.seed),
-      });
-      const res = await fetch(`${API_BASE}/shuttle-multi-hub/demo?${query}`, {
-        method: 'GET',
-      });
-      const json = (await res.json()) as
-        | Envelope<MultiHubResponse>
-        | MultiHubResponse;
-      if (!res.ok) {
-        const msg =
-          'message' in json && typeof json.message === 'string'
-            ? json.message
-            : `HTTP ${res.status}`;
-        throw new Error(msg);
+  const fetchData = useCallback(
+    async (src: DataSource, nextParams: DemoParams) => {
+      setLoading(true);
+      setError(null);
+      try {
+        const url =
+          src === 'seed'
+            ? `${API_BASE}/shuttle-multi-hub/seed?mode=${nextParams.mode}`
+            : (() => {
+                const query = new URLSearchParams({
+                  mode: nextParams.mode,
+                  n: String(nextParams.customerCount),
+                  vehicles: String(nextParams.vehicleCount),
+                  radius: String(nextParams.radiusKm),
+                  window: String(nextParams.windowWidth),
+                  depotEnd: String(nextParams.depotEnd),
+                  seed: String(nextParams.seed),
+                });
+                return `${API_BASE}/shuttle-multi-hub/demo?${query}`;
+              })();
+        const res = await fetch(url, { method: 'GET' });
+        const json = (await res.json()) as
+          | Envelope<MultiHubResponse>
+          | MultiHubResponse;
+        if (!res.ok) {
+          const msg =
+            'message' in json && typeof json.message === 'string'
+              ? json.message
+              : `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        const payload =
+          'success' in json && json.success && 'data' in json
+            ? json.data
+            : (json as MultiHubResponse);
+        setData(payload);
+      } catch (e) {
+        setData(null);
+        setError(e instanceof Error ? e.message : 'Lỗi không xác định');
+      } finally {
+        setLoading(false);
       }
-      const payload =
-        'success' in json && json.success && 'data' in json
-          ? json.data
-          : (json as MultiHubResponse);
-      setData(payload);
-    } catch (e) {
-      setData(null);
-      setError(e instanceof Error ? e.message : 'Lỗi không xác định');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
-    void fetchData(DEFAULT_PARAMS);
-  }, [fetchData]);
+    void fetchData(source, params);
+    // Chỉ refetch khi source hoặc mode đổi — không re-fetch khi user gõ vào
+    // các input random (chờ user bấm "Chạy solver" / "Sinh + Giải").
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, params.mode, fetchData]);
 
   const branches = useMemo(() => toBranches(data), [data]);
   const routeRows = useMemo(() => toRouteRows(data), [data]);
@@ -228,6 +240,20 @@ export default function ShuttleMultiHubView() {
         <Card>
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Space wrap>
+              <Text strong>Nguồn data:</Text>
+              <Radio.Group
+                value={source}
+                onChange={(e) => setSource(e.target.value as DataSource)}
+                disabled={loading}
+              >
+                <Radio.Button value="seed">
+                  Seed cố định (10 khách TPHCM)
+                </Radio.Button>
+                <Radio.Button value="random">Random instance</Radio.Button>
+              </Radio.Group>
+            </Space>
+
+            <Space wrap>
               <Text strong>Mô hình:</Text>
               <Radio.Group
                 value={params.mode}
@@ -244,14 +270,15 @@ export default function ShuttleMultiHubView() {
               </Radio.Group>
               <Button
                 icon={<ReloadOutlined />}
-                onClick={() => void fetchData(params)}
+                onClick={() => void fetchData(source, params)}
                 loading={loading}
               >
                 Chạy solver
               </Button>
             </Space>
 
-            <Space wrap size={[16, 8]}>
+            {source === 'random' && (
+              <Space wrap size={[16, 8]}>
               <Space>
                 <Text>Khách:</Text>
                 <InputNumber
@@ -344,7 +371,8 @@ export default function ShuttleMultiHubView() {
                   title="Random seed mới"
                 />
               </Space>
-            </Space>
+              </Space>
+            )}
           </Space>
         </Card>
 
@@ -449,13 +477,91 @@ export default function ShuttleMultiHubView() {
           </Col>
         </Row>
 
-        <Card title="Route theo xe">
+        <Card title="Route theo xe (mở rộng để xem thứ tự đón từng xe)">
           <Table<RouteTableRow>
             size="small"
             rowKey="key"
             dataSource={routeRows}
             pagination={false}
             loading={loading}
+            expandable={{
+              expandedRowRender: (row) => {
+                const route = data?.routes.find((r) => r.vehicleId === row.key);
+                if (!route) return null;
+                if (route.steps.length === 0) {
+                  return (
+                    <Text type="secondary">
+                      Xe này không được phân công khách nào.
+                    </Text>
+                  );
+                }
+                return (
+                  <Table<MultiHubStep & { idx: number }>
+                    size="small"
+                    pagination={false}
+                    rowKey={(s) => `${row.key}-${s.customerId}`}
+                    dataSource={route.steps.map((s, idx) => ({ ...s, idx }))}
+                    columns={[
+                      {
+                        title: '#',
+                        dataIndex: 'idx',
+                        width: 48,
+                        render: (idx: number) => (
+                          <Tag color={route.color}>{idx + 1}</Tag>
+                        ),
+                      },
+                      {
+                        title: 'Khách',
+                        dataIndex: 'customerName',
+                      },
+                      {
+                        title: 'TW yêu cầu',
+                        dataIndex: 'timeWindow',
+                        render: (tw: [number, number]) =>
+                          `${minutesToHHMM(tw[0])} – ${minutesToHHMM(tw[1])}`,
+                        width: 130,
+                      },
+                      {
+                        title: 'Đến',
+                        dataIndex: 'arrivalTime',
+                        width: 80,
+                        render: (v: number, s) => {
+                          const late = v > s.timeWindow[1];
+                          const txt = minutesToHHMM(v);
+                          return late ? (
+                            <Text type="danger" strong>
+                              {txt} ⚠
+                            </Text>
+                          ) : (
+                            txt
+                          );
+                        },
+                      },
+                      {
+                        title: 'Rời',
+                        dataIndex: 'departureTime',
+                        width: 80,
+                        render: (v: number) => minutesToHHMM(v),
+                      },
+                      {
+                        title: 'Quãng trước (km)',
+                        dataIndex: 'distanceFromPrev',
+                        width: 140,
+                        render: (v: number) => v.toFixed(2),
+                      },
+                      {
+                        title: 'Tọa độ',
+                        dataIndex: 'coordinates',
+                        render: (c: [number, number]) =>
+                          `${c[1].toFixed(4)}, ${c[0].toFixed(4)}`,
+                      },
+                    ]}
+                  />
+                );
+              },
+              rowExpandable: (row) => row.stops > 0,
+              defaultExpandAllRows: true,
+            }}
             columns={[
               {
                 title: 'Xe',
