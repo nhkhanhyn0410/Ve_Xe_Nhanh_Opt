@@ -53,9 +53,18 @@ export class SolveResponseDto {
 
   @ApiProperty({
     example: [106.7116, 10.8163],
-    description: 'Tọa độ depot [lng, lat]',
+    description: 'Tọa độ depot xuất phát [lng, lat]',
   })
   depotCoordinates!: [number, number];
+
+  @ApiProperty({ example: 'Bến Xe Miền Tây' })
+  endDepotName!: string;
+
+  @ApiProperty({
+    example: [106.6232, 10.7411],
+    description: 'Tọa độ depot kết thúc [lng, lat]',
+  })
+  endDepotCoordinates!: [number, number];
 
   @ApiProperty({
     example: 300,
@@ -67,7 +76,7 @@ export class SolveResponseDto {
   @ApiProperty({
     example: 504,
     description:
-      'Phút từ 00:00 — xe shuttle về đến depot. Khách lên xe khách chính ở đây. ' +
+      'Phút từ 00:00 — xe shuttle đến depot kết thúc. Khách lên xe khách chính ở đây. ' +
       'Nếu > depotEndWindow → khách lỡ chuyến.',
   })
   depotArrivalTime!: number;
@@ -78,6 +87,12 @@ export class SolveResponseDto {
       'Phút từ 00:00 — hạn chót về depot (giờ xe khách chính khởi hành)',
   })
   depotEndWindow!: number;
+
+  @ApiProperty({
+    example: 4.2,
+    description: 'Khoảng cách từ node cuối cùng đến depot kết thúc (km)',
+  })
+  endDepotDistanceFromPrev!: number;
 
   @ApiProperty({ type: [RouteStepDto] })
   steps!: RouteStepDto[];

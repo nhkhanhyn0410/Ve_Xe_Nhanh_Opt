@@ -61,6 +61,16 @@ export class SolveRequestDto {
   @Type(() => CustomerInputDto)
   depot!: CustomerInputDto;
 
+  @ApiPropertyOptional({
+    type: CustomerInputDto,
+    description:
+      'Depot kết thúc. Để trống nếu shuttle quay về depot xuất phát.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CustomerInputDto)
+  endDepot?: CustomerInputDto;
+
   @ApiProperty({ type: [CustomerInputDto] })
   @IsArray()
   @ValidateNested({ each: true })
@@ -72,13 +82,15 @@ export class SolveRequestDto {
     description: 'Giờ xe shuttle xuất phát (phút từ 00:00)',
   })
   @IsInt()
+  @Min(0)
   depotStartTime!: number;
 
   @ApiProperty({
     example: 420,
-    description: 'Giờ xe khách chính khởi hành — hạn về depot',
+    description: 'Giờ xe khách chính khởi hành — hạn đến depot kết thúc',
   })
   @IsInt()
+  @Min(0)
   depotEndTime!: number;
 
   @ApiPropertyOptional({

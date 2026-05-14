@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
 import { GreedySolver } from './greedy.solver';
 import { TwoOptSolver } from './two-opt.solver';
@@ -163,7 +163,8 @@ export class AntColonySolver extends TSPTWSolver {
       return this.toSolution(bestRoute, bestEval, Date.now() - start);
     }
 
-    const numNodes = n + 1; // depot + N customers
+    const endIdx = endDepotMatrixIdx(instance);
+    const numNodes = instance.distanceMatrix.length; // depot + customers (+ endDepot nếu có)
     const tau0 = 1 / (n * Math.max(1, greedyEval.cost));
     const tau = this.makeMatrix(numNodes, tau0);
     const eta = this.computeHeuristic(instance);
@@ -241,12 +242,12 @@ export class AntColonySolver extends TSPTWSolver {
         // Tất cả ant deposit
         for (const ant of ants) {
           const delta = Q / Math.max(1, ant.eval.cost);
-          this.depositPheromone(tau, ant.route, delta);
+          this.depositPheromone(tau, ant.route, delta, endIdx);
         }
       } else {
         // MMAS — chỉ globalBest deposit (mỗi vòng)
         const delta = Q / Math.max(1, bestEval.cost);
-        this.depositPheromone(tau, bestRoute, delta);
+        this.depositPheromone(tau, bestRoute, delta, endIdx);
 
         // Clamp τ ∈ [τ_min, τ_max]
         for (let i = 0; i < numNodes; i++) {
@@ -376,12 +377,14 @@ export class AntColonySolver extends TSPTWSolver {
 
   /**
    * Đặt pheromone (đối xứng) lên các cạnh của 1 tour.
-   * Tour gồm các cạnh: depot→r[0], r[i-1]→r[i] với i ≥ 1, r[N-1]→depot.
+   * Tour gồm các cạnh: depot→r[0], r[i-1]→r[i] với i ≥ 1,
+   * r[N-1]→depot kết thúc.
    */
   private depositPheromone(
     tau: number[][],
     route: number[],
     amount: number,
+    endDepotIdx: number,
   ): void {
     if (route.length === 0) return;
     let prev = 0;
@@ -391,9 +394,9 @@ export class AntColonySolver extends TSPTWSolver {
       tau[cur][prev] += amount; // đối xứng
       prev = cur;
     }
-    // Leg cuối về depot
-    tau[prev][0] += amount;
-    tau[0][prev] += amount;
+    // Leg cuối đến depot kết thúc
+    tau[prev][endDepotIdx] += amount;
+    tau[endDepotIdx][prev] += amount;
   }
 
   // ─── Evaluation ───────────────────────────────────────────────────────
@@ -438,9 +441,14 @@ export class AntColonySolver extends TSPTWSolver {
       lastMatrix = matrixIdx;
     }
 
-    distance += instance.distanceMatrix[lastMatrix][0];
-    const returnTravel = instance.durationMatrix[lastMatrix][0];
-    const totalDuration = curTime + returnTravel - instance.depotStartTime;
+    const endIdx = endDepotMatrixIdx(instance);
+    distance += instance.distanceMatrix[lastMatrix][endIdx];
+    const returnTravel = instance.durationMatrix[lastMatrix][endIdx];
+    const depotArrivalTime = curTime + returnTravel;
+    if (depotArrivalTime > instance.depotEndTime) {
+      violations++;
+    }
+    const totalDuration = depotArrivalTime - instance.depotStartTime;
     const cost = violations * AntColonySolver.VIOLATION_PENALTY + distance;
 
     return { distance, violations, totalDuration, arrivalTimes, cost };

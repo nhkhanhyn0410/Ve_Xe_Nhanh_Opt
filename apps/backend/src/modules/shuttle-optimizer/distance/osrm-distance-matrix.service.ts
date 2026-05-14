@@ -10,7 +10,8 @@ export interface DistanceMatrixResult {
 }
 
 /**
- * Service lấy ma trận khoảng cách cho N+1 node (1 depot + N customer).
+ * Service lấy ma trận khoảng cách cho danh sách node đã được sắp thứ tự:
+ * depot xuất phát, N customer, và có thể thêm depot kết thúc.
  *
  * Strategy:
  *   1. Thử gọi OSRM /table endpoint → kết quả đường bộ thực tế
@@ -30,7 +31,8 @@ export class OsrmDistanceMatrixService {
 
   /**
    * Lấy distance matrix cho danh sách tọa độ.
-   * @param coordinates mảng [lng, lat] — index 0 là depot, 1..N là customers
+   * @param coordinates mảng [lng, lat] — index 0 là depot, 1..N là customers,
+   *                    N+1 có thể là depot kết thúc
    */
   /**
    * Lấy distance matrix cho danh sách tọa độ.

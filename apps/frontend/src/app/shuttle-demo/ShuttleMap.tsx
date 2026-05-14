@@ -25,6 +25,9 @@ export interface ShuttleMapProps {
   /** Tọa độ depot [lng, lat] */
   depot: [number, number];
   depotName: string;
+  /** Tọa độ depot kết thúc [lng, lat]. Nếu không có thì dùng depot. */
+  endDepot?: [number, number];
+  endDepotName?: string;
   /** Các bước theo thứ tự thuật toán đã đề xuất */
   steps: MapStep[];
   /**
@@ -76,6 +79,8 @@ function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
 export default function ShuttleMap({
   depot,
   depotName,
+  endDepot,
+  endDepotName,
   steps,
   routeGeometry,
 }: ShuttleMapProps) {
@@ -84,10 +89,17 @@ export default function ShuttleMap({
     () => [depot[1], depot[0]],
     [depot],
   );
+  const finalDepot = endDepot ?? depot;
+  const finalDepotName = endDepotName ?? depotName;
+  const endDepotLatLng: LatLngExpression = useMemo(
+    () => [finalDepot[1], finalDepot[0]],
+    [finalDepot],
+  );
+  const isOpenRoute = finalDepot[0] !== depot[0] || finalDepot[1] !== depot[1];
 
   /**
    * Ưu tiên polyline OSRM (đường thật) nếu có.
-   * Fallback: đường thẳng nối depot → customers → depot.
+   * Fallback: đường thẳng nối depot → customers → depot kết thúc.
    */
   const routeLatLngs: LatLngExpression[] = useMemo(() => {
     if (routeGeometry && routeGeometry.length >= 2) {
@@ -95,21 +107,22 @@ export default function ShuttleMap({
     }
     const path: LatLngExpression[] = [depotLatLng];
     steps.forEach((s) => path.push([s.coordinates[1], s.coordinates[0]]));
-    path.push(depotLatLng); // quay về depot
+    path.push(endDepotLatLng);
     return path;
-  }, [routeGeometry, depotLatLng, steps]);
+  }, [routeGeometry, depotLatLng, endDepotLatLng, steps]);
 
   const usingOsrm = Boolean(routeGeometry && routeGeometry.length >= 2);
 
   const bounds: LatLngBoundsExpression = useMemo(() => {
     const all: [number, number][] = [
       [depot[1], depot[0]],
+      [finalDepot[1], finalDepot[0]],
       ...steps.map(
         (s) => [s.coordinates[1], s.coordinates[0]] as [number, number],
       ),
     ];
     return all;
-  }, [depot, steps]);
+  }, [depot, finalDepot, steps]);
 
   return (
     <MapContainer
@@ -138,12 +151,23 @@ export default function ShuttleMap({
         }}
       />
 
-      {/* Depot — icon màu đỏ, label "D" */}
-      <Marker position={depotLatLng} icon={numberedIcon('D', '#ef4444')}>
+      {/* Depot xuất phát */}
+      <Marker
+        position={depotLatLng}
+        icon={numberedIcon(isOpenRoute ? 'S' : 'D', '#ef4444')}
+      >
         <Popup>
-          <strong>Depot:</strong> {depotName}
+          <strong>Depot xuất phát:</strong> {depotName}
         </Popup>
       </Marker>
+
+      {isOpenRoute && (
+        <Marker position={endDepotLatLng} icon={numberedIcon('E', '#dc2626')}>
+          <Popup>
+            <strong>Depot kết thúc:</strong> {finalDepotName}
+          </Popup>
+        </Marker>
+      )}
 
       {/* Customer markers, đánh số theo thứ tự thuật toán đi */}
       {steps.map((s, idx) => (

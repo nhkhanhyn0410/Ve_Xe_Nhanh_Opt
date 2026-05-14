@@ -15,6 +15,10 @@ export interface GenerateConfig {
   depotCenter?: [number, number];
   /** Tên depot (chỉ dùng để hiển thị). */
   depotName?: string;
+  /** Tâm depot kết thúc [lng, lat]. Để trống nếu quay về depot xuất phát. */
+  endDepotCenter?: [number, number];
+  /** Tên depot kết thúc (chỉ dùng để hiển thị). */
+  endDepotName?: string;
   /** Window width trung bình (phút). Càng nhỏ càng khó. Mặc định 60. */
   windowWidthMinutes?: number;
   /** Phút từ 00:00 — shuttle xuất phát. Mặc định 300 (5:00). */
@@ -90,6 +94,8 @@ export class InstanceGenerator {
       radiusKm = 15,
       depotCenter = DEFAULT_DEPOT_CENTER,
       depotName = 'Random Depot',
+      endDepotCenter,
+      endDepotName = 'End Depot',
       windowWidthMinutes = 60,
       depotStartTime = 300,
       depotEndTime = 420,
@@ -123,7 +129,11 @@ export class InstanceGenerator {
     }
 
     // 2) Build distance + duration matrix
-    const allCoords: Array<[number, number]> = [depotCenter, ...customerCoords];
+    const allCoords: Array<[number, number]> = [
+      depotCenter,
+      ...customerCoords,
+      ...(endDepotCenter ? [endDepotCenter] : []),
+    ];
     const matrix = await this.distanceService.getMatrix(allCoords);
 
     // 3) Sinh time window cho từng customer
@@ -161,6 +171,15 @@ export class InstanceGenerator {
         serviceTime: 0,
         timeWindow: { earliest: depotStartTime, latest: depotEndTime },
       },
+      endDepot: endDepotCenter
+        ? {
+            id: 'gen-end-depot',
+            name: endDepotName,
+            coordinates: endDepotCenter,
+            serviceTime: 0,
+            timeWindow: { earliest: depotStartTime, latest: depotEndTime },
+          }
+        : undefined,
       customers,
       distanceMatrix: matrix.distances,
       durationMatrix: matrix.durations,

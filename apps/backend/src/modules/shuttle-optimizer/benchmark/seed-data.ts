@@ -2,7 +2,8 @@ import { TSPTWInstance } from '../models/tsptw-instance';
 
 /**
  * Dữ liệu demo — 10 điểm đón thực tế ở TPHCM.
- * Depot: Bến Xe Miền Đông. Xe khách chính khởi hành 7:00 (420 phút).
+ * Shuttle xuất phát tại Bến Xe Miền Tây và kết thúc ở Bến Xe Miền Đông.
+ * Xe khách chính khởi hành 7:00 (420 phút).
  * Xe shuttle xuất phát 5:00 (300 phút), phải về trước 6:40 (400 phút).
  *
  * Tọa độ [lng, lat] — chuẩn GeoJSON.
@@ -18,6 +19,13 @@ export const DEMO_SEED: Omit<
 > = {
   id: 'demo-tphcm-10-customers',
   depot: {
+    id: 'depot-bxmt',
+    name: 'Bến Xe Miền Tây',
+    coordinates: [106.6232, 10.7411],
+    serviceTime: 0,
+    timeWindow: { earliest: 300, latest: 420 },
+  },
+  endDepot: {
     id: 'depot-bxmd',
     name: 'Bến Xe Miền Đông',
     coordinates: [106.7116, 10.8163],

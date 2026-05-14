@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution } from '../models/tsptw-solution';
 import { waitTime, isLate } from '../models/time-window';
 
@@ -13,7 +13,7 @@ import { waitTime, isLate } from '../models/time-window';
  *      (nearest + sớm nhất — tie-break tự nhiên theo time window)
  *   3. Di chuyển đến đó, nếu đến sớm thì chờ đến earliest, sau đó service
  *   4. Lặp đến khi hết customer
- *   5. Quay về depot, tính tổng distance
+ *   5. Đi đến depot kết thúc, tính tổng distance + duration
  *
  * Complexity: O(N²)
  * Vai trò: BASELINE — tất cả thuật toán khác phải beat được greedy.
@@ -84,9 +84,15 @@ export class GreedySolver extends TSPTWSolver {
       visited.add(bestCustomerIdx);
     }
 
-    // Quay về depot
-    totalDistance += instance.distanceMatrix[currentNodeIdx][0];
-    const totalDuration = currentTime - instance.depotStartTime;
+    // Đi đến depot kết thúc (0 nếu closed TSPTW, N+1 nếu open TSPTW)
+    const endIdx = endDepotMatrixIdx(instance);
+    const returnTravel = instance.durationMatrix[currentNodeIdx][endIdx];
+    const depotArrivalTime = currentTime + returnTravel;
+    totalDistance += instance.distanceMatrix[currentNodeIdx][endIdx];
+    if (depotArrivalTime > instance.depotEndTime) {
+      violationCount++;
+    }
+    const totalDuration = depotArrivalTime - instance.depotStartTime;
 
     return Promise.resolve({
       route,

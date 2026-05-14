@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
 import { isLate } from '../models/time-window';
 
@@ -28,7 +28,7 @@ import { isLate } from '../models/time-window';
  *
  * Base: dp[{i}][i] = { cost: distance[0][i+1], time: depart_i, prev: -1 }
  *
- * Final: min_{i ∈ full} (dp[full][i].cost + distance[i+1][0])
+ * Final: min_{i ∈ full} (dp[full][i].cost + distance[i+1][endDepot])
  *
  * --- Lưu ý về time window ---
  *
@@ -82,6 +82,7 @@ export class BruteForceSolver extends TSPTWSolver {
     const distance = instance.distanceMatrix;
     const duration = instance.durationMatrix;
     const customers = instance.customers;
+    const endIdx = endDepotMatrixIdx(instance);
     const fullSet = (1 << n) - 1;
     const numStates = 1 << n;
 
@@ -137,13 +138,13 @@ export class BruteForceSolver extends TSPTWSolver {
       }
     }
 
-    // Tìm endpoint i tối ưu cho leg cuối i → depot
+    // Tìm endpoint i tối ưu cho leg cuối i -> depot kết thúc
     let bestCost = Infinity;
     let bestEnd = -1;
     for (let i = 0; i < n; i++) {
       const idx = fullSet * n + i;
       if (cost[idx] === Infinity) continue;
-      const total = cost[idx] + distance[i + 1][0];
+      const total = cost[idx] + distance[i + 1][endIdx];
       if (total < bestCost) {
         bestCost = total;
         bestEnd = i;
@@ -190,9 +191,13 @@ export class BruteForceSolver extends TSPTWSolver {
       lastMatrixIdx = matrixIdx;
     }
 
-    // Leg cuối về depot
-    const returnTravel = duration[lastMatrixIdx][0];
-    const totalDuration = curTime + returnTravel - instance.depotStartTime;
+    // Leg cuối đến depot kết thúc
+    const returnTravel = duration[lastMatrixIdx][endIdx];
+    const depotArrivalTime = curTime + returnTravel;
+    if (depotArrivalTime > instance.depotEndTime) {
+      violationCount++;
+    }
+    const totalDuration = depotArrivalTime - instance.depotStartTime;
 
     return Promise.resolve({
       route,

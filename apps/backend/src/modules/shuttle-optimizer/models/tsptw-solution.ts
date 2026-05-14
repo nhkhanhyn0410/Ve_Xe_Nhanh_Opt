@@ -2,9 +2,9 @@
  * Nghiệm của bài toán TSPTW.
  *
  * Chú ý: `route` là danh sách CUSTOMER INDEX (1..N), KHÔNG bao gồm depot.
- * Depot được ngầm hiểu ở đầu và cuối route.
+ * Depot xuất phát và depot kết thúc được ngầm hiểu ở đầu/cuối route.
  * Ví dụ với N=4 customer, route = [2, 0, 3, 1] nghĩa là:
- *   depot → customers[2] → customers[0] → customers[3] → customers[1] → depot
+ *   depot → customers[2] → customers[0] → customers[3] → customers[1] → endDepot
  */
 export interface TSPTWSolution {
   /** Thứ tự visit customer (0-indexed vào mảng customers) */

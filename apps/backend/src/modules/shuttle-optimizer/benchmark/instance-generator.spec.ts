@@ -19,6 +19,21 @@ describe('InstanceGenerator', () => {
     inst.durationMatrix.forEach((row) => expect(row).toHaveLength(6));
   });
 
+  it('matrix có thêm node depot kết thúc khi truyền endDepotCenter', async () => {
+    const inst = await gen.generate({
+      customerCount: 5,
+      seed: 42,
+      endDepotCenter: [106.6232, 10.7411],
+      endDepotName: 'Bến Xe Miền Tây',
+    });
+
+    expect(inst.endDepot?.name).toBe('Bến Xe Miền Tây');
+    expect(inst.distanceMatrix).toHaveLength(7);
+    expect(inst.durationMatrix).toHaveLength(7);
+    inst.distanceMatrix.forEach((row) => expect(row).toHaveLength(7));
+    inst.durationMatrix.forEach((row) => expect(row).toHaveLength(7));
+  });
+
   it('matrix đối xứng và đường chéo = 0', async () => {
     const inst = await gen.generate({ customerCount: 6, seed: 42 });
     const n = inst.distanceMatrix.length;

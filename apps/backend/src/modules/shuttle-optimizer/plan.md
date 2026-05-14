@@ -189,16 +189,21 @@ N khách hàng đặt vé, mỗi khách:
 ### 3.2 Quy ước index trong matrix
 
 ```
-distanceMatrix[N+1][N+1]:
-  index 0   → depot
+Closed TSPTW distanceMatrix[N+1][N+1]:
+  index 0    → depot xuất phát/kết thúc
   index 1..N → customers[0..N-1]
+
+Open TSPTW distanceMatrix[N+2][N+2]:
+  index 0    → depot xuất phát
+  index 1..N → customers[0..N-1]
+  index N+1  → depot kết thúc
 
 Cẩn thận:
   - solution.route[]  chỉ chứa customer index 0..N-1
   - Khi truy matrix:  matrixIdx = customerIdx + 1
   - Leg đầu:  matrix[0][route[0]+1]
   - Leg giữa: matrix[route[i-1]+1][route[i]+1]
-  - Leg cuối: matrix[route[N-1]+1][0]
+  - Leg cuối: matrix[route[N-1]+1][endDepotMatrixIdx(instance)]
 ```
 
 ### 3.3 Time tracking
@@ -206,7 +211,7 @@ Cẩn thận:
 ```
 Đơn vị:        phút từ 00:00 (300 = 5:00 AM)
 depotStart:    300
-depotEnd:      400 (6:40, hạn về để khách lên xe khách chính)
+depotEnd:      400 (6:40, hạn đến depot kết thúc để khách lên xe khách chính)
 travel:        durationMatrix[i][j] (phút, đã ROAD_FACTOR + AVG_SPEED)
 service:       2 phút mặc định (đón khách + lên xe)
 arrival:       currentTime + travel

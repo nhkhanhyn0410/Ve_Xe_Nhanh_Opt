@@ -55,6 +55,7 @@ export class ShuttleOptimizerController {
     description:
       'Sinh N customer ngẫu nhiên trong bán kính radiusKm quanh depot, ' +
       'rồi giải bằng solver được chọn. Cùng seed → cùng instance (reproducible). ' +
+      'Có thể truyền endDepotLng/endDepotLat để kết thúc ở depot khác. ' +
       'Phù hợp test scaling + so sánh solver trên data đa dạng.',
   })
   @ApiQuery({
@@ -75,7 +76,24 @@ export class ShuttleOptimizerController {
   @ApiQuery({
     name: 'depotEnd',
     required: false,
-    description: 'Hạn về depot (phút từ 00:00). Mặc định 420 (7:00)',
+    description: 'Hạn đến depot kết thúc (phút từ 00:00). Mặc định 420 (7:00)',
+  })
+  @ApiQuery({
+    name: 'endDepotLng',
+    required: false,
+    description:
+      'Longitude depot kết thúc. Bỏ trống nếu quay về depot xuất phát',
+  })
+  @ApiQuery({
+    name: 'endDepotLat',
+    required: false,
+    description:
+      'Latitude depot kết thúc. Bỏ trống nếu quay về depot xuất phát',
+  })
+  @ApiQuery({
+    name: 'endDepotName',
+    required: false,
+    description: 'Tên depot kết thúc. Mặc định: End Depot',
   })
   @ApiQuery({
     name: 'seed',
@@ -92,6 +110,9 @@ export class ShuttleOptimizerController {
     @Query('radius') radius?: string,
     @Query('window') window?: string,
     @Query('depotEnd') depotEnd?: string,
+    @Query('endDepotLng') endDepotLng?: string,
+    @Query('endDepotLat') endDepotLat?: string,
+    @Query('endDepotName') endDepotName?: string,
     @Query('seed') seed?: string,
     @Query('solver') solver?: string,
   ): Promise<SolveResponseDto> {
@@ -99,12 +120,34 @@ export class ShuttleOptimizerController {
     if (Number.isNaN(customerCount)) {
       throw new BadRequestException(`n phải là số nguyên (nhận '${n}')`);
     }
+    const hasEndLng = endDepotLng !== undefined;
+    const hasEndLat = endDepotLat !== undefined;
+    if (hasEndLng !== hasEndLat) {
+      throw new BadRequestException(
+        'endDepotLng và endDepotLat phải truyền cùng nhau',
+      );
+    }
+    const endDepotCenter =
+      hasEndLng && hasEndLat
+        ? ([parseFloat(endDepotLng), parseFloat(endDepotLat)] as [
+            number,
+            number,
+          ])
+        : undefined;
+    if (
+      endDepotCenter &&
+      (Number.isNaN(endDepotCenter[0]) || Number.isNaN(endDepotCenter[1]))
+    ) {
+      throw new BadRequestException('endDepotLng/endDepotLat phải là số');
+    }
     return this.shuttleOptimizerService.solveRandomInstance(
       {
         customerCount,
         radiusKm: radius ? parseFloat(radius) : undefined,
         windowWidthMinutes: window ? parseFloat(window) : undefined,
         depotEndTime: depotEnd ? parseInt(depotEnd, 10) : undefined,
+        endDepotCenter,
+        endDepotName,
         seed: seed ? parseInt(seed, 10) : undefined,
       },
       solver,
@@ -115,7 +158,8 @@ export class ShuttleOptimizerController {
   @ApiOperation({
     summary: 'Giải bài toán TSPTW cho 1 xe shuttle đón N khách',
     description:
-      'Default solver: aco-2opt-hybrid. Có thể chọn solver khác qua field `solver` trong request body.',
+      'Default solver: aco-2opt-hybrid. Có thể chọn solver khác qua field `solver`. ' +
+      'Truyền `endDepot` nếu depot kết thúc khác depot xuất phát.',
   })
   async solve(@Body() dto: SolveRequestDto): Promise<SolveResponseDto> {
     return this.shuttleOptimizerService.solve(dto);

@@ -52,12 +52,18 @@ interface SolveResponse {
   depotName: string;
   /** Tọa độ depot [lng, lat] */
   depotCoordinates: [number, number];
+  /** Tên depot kết thúc từ backend. Nếu vắng mặt thì dùng depotName. */
+  endDepotName?: string;
+  /** Tọa độ depot kết thúc [lng, lat]. Nếu vắng mặt thì dùng depotCoordinates. */
+  endDepotCoordinates?: [number, number];
   /** Phút từ 00:00 — shuttle rời depot */
   depotDepartureTime: number;
-  /** Phút từ 00:00 — shuttle về depot (= điểm lên xe khách chính) */
+  /** Phút từ 00:00 — shuttle đến depot kết thúc (= điểm lên xe khách chính) */
   depotArrivalTime: number;
-  /** Hạn chót về depot — vượt qua = khách lỡ chuyến */
+  /** Hạn chót đến depot kết thúc — vượt qua = khách lỡ chuyến */
   depotEndWindow: number;
+  /** Khoảng cách từ node cuối đến depot kết thúc */
+  endDepotDistanceFromPrev?: number;
   steps: MapStep[];
   /** Polyline đường thật từ OSRM — [lng, lat][] */
   routeGeometry?: [number, number][];
@@ -108,6 +114,8 @@ function buildTableRows(data: SolveResponse | null): TableRow[] {
   if (!data) return [];
 
   const rows: TableRow[] = [];
+  const endDepotName = data.endDepotName ?? data.depotName;
+  const endDepotCoordinates = data.endDepotCoordinates ?? data.depotCoordinates;
 
   rows.push({
     key: 'depot-start',
@@ -134,11 +142,11 @@ function buildTableRows(data: SolveResponse | null): TableRow[] {
   rows.push({
     key: 'depot-end',
     kind: 'depot-end',
-    label: `${data.depotName} (lên xe khách chính)`,
+    label: `${endDepotName} (lên xe khách chính)`,
     arrivalTime: data.depotArrivalTime,
     departureTime: 0,
-    distanceFromPrev: 0,
-    coordinates: data.depotCoordinates,
+    distanceFromPrev: data.endDepotDistanceFromPrev ?? 0,
+    coordinates: endDepotCoordinates,
     isLate: data.depotArrivalTime > data.depotEndWindow,
   });
 
@@ -154,6 +162,7 @@ interface RandomParams {
   windowWidth: number;
   depotEnd: number;
   seed: number;
+  returnToDifferentDepot: boolean;
 }
 
 const DEFAULT_RANDOM: RandomParams = {
@@ -162,7 +171,10 @@ const DEFAULT_RANDOM: RandomParams = {
   windowWidth: 60,
   depotEnd: 420,
   seed: 42,
+  returnToDifferentDepot: false,
 };
+
+const BXMT: [number, number] = [106.6232, 10.7411];
 
 export default function ShuttleDemoView() {
   const [solver, setSolver] = useState<string>('greedy-nearest-neighbor');
@@ -181,6 +193,9 @@ export default function ShuttleDemoView() {
       setLoading(true);
       setError(null);
       try {
+        const endDepotQuery = randomParams.returnToDifferentDepot
+          ? `&endDepotLng=${BXMT[0]}&endDepotLat=${BXMT[1]}&endDepotName=${encodeURIComponent('Bến Xe Miền Tây')}`
+          : '';
         const url =
           src === 'demo'
             ? `${API_BASE}/shuttle-optimizer/demo?solver=${encodeURIComponent(solverName)}`
@@ -190,7 +205,8 @@ export default function ShuttleDemoView() {
               `window=${randomParams.windowWidth}&` +
               `depotEnd=${randomParams.depotEnd}&` +
               `seed=${randomParams.seed}&` +
-              `solver=${encodeURIComponent(solverName)}`;
+              `solver=${encodeURIComponent(solverName)}` +
+              endDepotQuery;
         const res = await fetch(url, { method: 'GET' });
         const json = (await res.json()) as
           | Envelope<SolveResponse>
@@ -233,7 +249,7 @@ export default function ShuttleDemoView() {
           </Title>
           <Text type="secondary">
             {data
-              ? `Depot: ${data.depotName}. Hạn về bến: ${minutesToHHMM(data.depotEndWindow)}.`
+              ? `Depot: ${data.depotName} → ${data.endDepotName ?? data.depotName}. Hạn đến bến: ${minutesToHHMM(data.depotEndWindow)}.`
               : 'Đang tải...'}
           </Text>
         </div>
@@ -326,6 +342,23 @@ export default function ShuttleDemoView() {
                   />
                 </Space>
                 <Space>
+                  <Text>Depot cuối:</Text>
+                  <Radio.Group
+                    size="small"
+                    value={random.returnToDifferentDepot ? 'bxmt' : 'same'}
+                    onChange={(e) =>
+                      setRandom({
+                        ...random,
+                        returnToDifferentDepot: e.target.value === 'bxmt',
+                      })
+                    }
+                    disabled={loading}
+                  >
+                    <Radio.Button value="same">Depot xuất phát</Radio.Button>
+                    <Radio.Button value="bxmt">Bến Xe Miền Tây</Radio.Button>
+                  </Radio.Group>
+                </Space>
+                <Space>
                   <Text>Seed:</Text>
                   <InputNumber
                     value={random.seed}
@@ -389,6 +422,8 @@ export default function ShuttleDemoView() {
                   <ShuttleMap
                     depot={data.depotCoordinates}
                     depotName={data.depotName}
+                    endDepot={data.endDepotCoordinates}
+                    endDepotName={data.endDepotName}
                     steps={data.steps}
                     routeGeometry={data.routeGeometry}
                   />

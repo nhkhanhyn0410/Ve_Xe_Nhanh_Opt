@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
 import { GreedySolver } from './greedy.solver';
 import { SeededRandom } from '../models/seeded-random';
@@ -296,9 +296,14 @@ export class SimulatedAnnealingSolver extends TSPTWSolver {
       lastMatrix = matrixIdx;
     }
 
-    distance += instance.distanceMatrix[lastMatrix][0];
-    const returnTravel = instance.durationMatrix[lastMatrix][0];
-    const totalDuration = curTime + returnTravel - instance.depotStartTime;
+    const endIdx = endDepotMatrixIdx(instance);
+    distance += instance.distanceMatrix[lastMatrix][endIdx];
+    const returnTravel = instance.durationMatrix[lastMatrix][endIdx];
+    const depotArrivalTime = curTime + returnTravel;
+    if (depotArrivalTime > instance.depotEndTime) {
+      violations++;
+    }
+    const totalDuration = depotArrivalTime - instance.depotStartTime;
 
     return { distance, violations, totalDuration, arrivalTimes };
   }

@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
 
 /**
@@ -107,6 +107,7 @@ export class OrToolsSolver extends TSPTWSolver {
       config?.timeLimitMs ?? OrToolsSolver.DEFAULT_TIME_LIMIT_MS;
     const violationPenalty =
       config?.violationPenalty ?? OrToolsSolver.DEFAULT_VIOLATION_PENALTY;
+    const endIdx = endDepotMatrixIdx(instance);
 
     const allTimeWindows: Array<[number, number]> = [
       [instance.depot.timeWindow.earliest, instance.depot.timeWindow.latest],
@@ -118,6 +119,13 @@ export class OrToolsSolver extends TSPTWSolver {
       instance.depot.serviceTime,
       ...instance.customers.map((c) => c.serviceTime),
     ];
+    if (instance.endDepot) {
+      allTimeWindows.push([
+        instance.endDepot.timeWindow.earliest,
+        instance.endDepot.timeWindow.latest,
+      ]);
+      allServiceTimes.push(instance.endDepot.serviceTime);
+    }
 
     const input = {
       distance_matrix: instance.distanceMatrix,
@@ -126,6 +134,8 @@ export class OrToolsSolver extends TSPTWSolver {
       service_times: allServiceTimes,
       depot_start: instance.depotStartTime,
       depot_end: instance.depotEndTime,
+      end_depot_index: endIdx,
+      customer_count: n,
       time_limit_seconds: Math.max(1, Math.floor(timeLimitMs / 1000)),
       violation_penalty: violationPenalty,
     };

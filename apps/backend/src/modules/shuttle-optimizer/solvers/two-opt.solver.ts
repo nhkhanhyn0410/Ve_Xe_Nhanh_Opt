@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { TSPTWSolver, SolverConfig } from './solver.interface';
-import { TSPTWInstance } from '../models/tsptw-instance';
+import { endDepotMatrixIdx, TSPTWInstance } from '../models/tsptw-instance';
 import { TSPTWSolution, emptySolution } from '../models/tsptw-solution';
 import { GreedySolver } from './greedy.solver';
 import { isLate } from '../models/time-window';
@@ -223,10 +223,15 @@ export class TwoOptSolver extends TSPTWSolver {
       lastMatrix = matrixIdx;
     }
 
-    // Leg cuối về depot
-    distance += instance.distanceMatrix[lastMatrix][0];
-    const returnTravel = instance.durationMatrix[lastMatrix][0];
-    const totalDuration = curTime + returnTravel - instance.depotStartTime;
+    // Leg cuối đến depot kết thúc
+    const endIdx = endDepotMatrixIdx(instance);
+    distance += instance.distanceMatrix[lastMatrix][endIdx];
+    const returnTravel = instance.durationMatrix[lastMatrix][endIdx];
+    const depotArrivalTime = curTime + returnTravel;
+    if (depotArrivalTime > instance.depotEndTime) {
+      violations++;
+    }
+    const totalDuration = depotArrivalTime - instance.depotStartTime;
 
     return { distance, violations, totalDuration, arrivalTimes };
   }

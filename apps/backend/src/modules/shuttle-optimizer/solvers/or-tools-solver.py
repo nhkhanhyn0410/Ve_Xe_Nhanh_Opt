@@ -6,12 +6,14 @@ OR-Tools TSPTW solver subprocess.
 
 Input format (stdin):
 {
-  "distance_matrix":  [[float, ...], ...]      # km, (N+1)×(N+1), [0]=depot
+  "distance_matrix":  [[float, ...], ...]      # km, [0]=start depot, optional [N+1]=end depot
   "duration_matrix":  [[float, ...], ...]      # phút, cùng kích thước
   "time_windows":     [[earliest, latest], ...] # phút từ 00:00, len = N+1
   "service_times":    [int, ...]               # phút, len = N+1
   "depot_start":      int                      # phút (= time_windows[0][0])
   "depot_end":        int                      # phút (= time_windows[0][1])
+  "end_depot_index":  int                      # 0 nếu closed, N+1 nếu open
+  "customer_count":   int                      # số customer, không tính depot
   "time_limit_seconds": int                    # giới hạn thời gian solver
   "violation_penalty": int                     # phạt soft TW (default 10000)
 }
@@ -83,6 +85,8 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
     service_times = data["service_times"]
     depot_start = int(data["depot_start"])
     depot_end = int(data["depot_end"])
+    end_depot_index = int(data.get("end_depot_index", 0))
+    customer_count = int(data.get("customer_count", len(distance_matrix) - 1))
     time_limit_seconds = int(data.get("time_limit_seconds", 5))
     violation_penalty = int(data.get("violation_penalty", 10_000))
 
@@ -98,8 +102,8 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
         [int(round(duration_matrix[i][j])) for j in range(n)] for i in range(n)
     ]
 
-    # 1 vehicle, depot index 0, vừa start vừa end
-    manager = pywrapcp.RoutingIndexManager(n, 1, 0)
+    # 1 vehicle, start depot index 0, end depot có thể khác 0.
+    manager = pywrapcp.RoutingIndexManager(n, 1, [0], [end_depot_index])
     routing = pywrapcp.RoutingModel(manager)
 
     # ─── Distance callback (objective) ──────────────────────────────────
@@ -131,7 +135,9 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
 
     # ─── Time window constraints với SOFT upper bound ──────────────────
     # Lý do soft: matching behavior với Greedy/SA — đếm vi phạm, không từ chối.
-    for node in range(1, n):  # bỏ qua depot
+    for node in range(1, n):  # bỏ qua depot start/end
+        if node == end_depot_index:
+            continue
         earliest, latest = time_windows[node]
         index = manager.NodeToIndex(node)
         # Hard lower (đến sớm thì wait, OK)
@@ -178,7 +184,7 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
 
     while not routing.IsEnd(index):
         node = manager.IndexToNode(index)
-        if node != 0:  # bỏ qua depot ở start
+        if 1 <= node <= customer_count:
             route.append(node - 1)  # đổi lại về customer index (0..N-1)
             arrival = solution.Value(time_dim.CumulVar(index))
             arrival_times.append(arrival)
@@ -190,9 +196,10 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
         prev_node = node
         index = solution.Value(routing.NextVar(index))
 
-    # Leg cuối: prev_node → depot
+    # Leg cuối: prev_node -> depot kết thúc
+    end_node = manager.IndexToNode(index)
     if prev_node is not None:
-        total_distance += distance_matrix[prev_node][0]
+        total_distance += distance_matrix[prev_node][end_node]
 
     # Total duration = time tại depot end - depot start
     end_time = solution.Value(time_dim.CumulVar(routing.End(0)))

@@ -12,9 +12,14 @@ import {
   InstanceGenerator,
   GenerateConfig,
 } from './benchmark/instance-generator';
-import { TSPTWInstance } from './models/tsptw-instance';
+import {
+  endDepotMatrixIdx,
+  endDepotNode,
+  TSPTWInstance,
+  TSPTWNode,
+} from './models/tsptw-instance';
 import { TSPTWSolution } from './models/tsptw-solution';
-import { SolveRequestDto } from './dto/solve-request.dto';
+import { CustomerInputDto, SolveRequestDto } from './dto/solve-request.dto';
 import { SolveResponseDto, RouteStepDto } from './dto/solve-response.dto';
 import { DEMO_SEED } from './benchmark/seed-data';
 
@@ -135,7 +140,8 @@ export class ShuttleOptimizerService {
 
   /**
    * Gọi OSRM để lấy polyline đường thật theo thứ tự ghé thăm của solution.
-   * Thứ tự waypoint: depot → customer[route[0]] → ... → customer[route[N-1]] → depot.
+   * Thứ tự waypoint: depot → customer[route[0]] → ... → customer[route[N-1]]
+   * → depot kết thúc.
    * Trả null khi OSRM không khả dụng (frontend sẽ fallback sang đường thẳng).
    */
   private async fetchRouteGeometry(
@@ -145,6 +151,7 @@ export class ShuttleOptimizerService {
     if (!this.osrmService.isAvailable() || solution.route.length === 0) {
       return undefined;
     }
+    const finalDepot = endDepotNode(instance);
     const waypoints = [
       {
         lng: instance.depot.coordinates[0],
@@ -155,8 +162,8 @@ export class ShuttleOptimizerService {
         lat: instance.customers[idx].coordinates[1],
       })),
       {
-        lng: instance.depot.coordinates[0],
-        lat: instance.depot.coordinates[1],
+        lng: finalDepot.coordinates[0],
+        lat: finalDepot.coordinates[1],
       },
     ];
     const geometry = await this.osrmService.getRouteGeometry(waypoints);
@@ -167,7 +174,11 @@ export class ShuttleOptimizerService {
    * Build TSPTWInstance từ DEMO_SEED bằng Haversine distance matrix.
    */
   private async buildInstanceFromSeed(): Promise<TSPTWInstance> {
-    const allNodes = [DEMO_SEED.depot, ...DEMO_SEED.customers];
+    const allNodes = [
+      DEMO_SEED.depot,
+      ...DEMO_SEED.customers,
+      ...(DEMO_SEED.endDepot ? [DEMO_SEED.endDepot] : []),
+    ];
     const coordinates = allNodes.map((n) => n.coordinates);
     const matrix = await this.distanceService.getMatrix(coordinates);
 
@@ -180,12 +191,40 @@ export class ShuttleOptimizerService {
 
   /**
    * Chuyển SolveRequestDto → TSPTWInstance.
-   * TODO Week 1: implement đầy đủ — hiện tại throw để nhắc implement.
    */
-  private buildInstance(dto: SolveRequestDto): Promise<TSPTWInstance> {
-    void dto;
-    // TODO: gọi distanceService.getMatrix, sinh distanceMatrix + durationMatrix
-    return Promise.reject(new Error('buildInstance chưa implement'));
+  private async buildInstance(dto: SolveRequestDto): Promise<TSPTWInstance> {
+    if (!dto.customers || dto.customers.length === 0) {
+      throw new BadRequestException('customers phải có ít nhất 1 điểm đón');
+    }
+
+    const depot = this.toNode(dto.depot, 0);
+    const endDepot = dto.endDepot ? this.toNode(dto.endDepot, 0) : undefined;
+    const customers = dto.customers.map((customer) =>
+      this.toNode(customer, customer.serviceTime ?? 2),
+    );
+
+    if (dto.depotEndTime < dto.depotStartTime) {
+      throw new BadRequestException(
+        'depotEndTime phải lớn hơn hoặc bằng depotStartTime',
+      );
+    }
+
+    const allNodes = [depot, ...customers, ...(endDepot ? [endDepot] : [])];
+    const matrix = await this.distanceService.getMatrix(
+      allNodes.map((node) => node.coordinates),
+    );
+
+    return {
+      id: `request-${Date.now()}`,
+      depot,
+      endDepot,
+      customers,
+      distanceMatrix: matrix.distances,
+      durationMatrix: matrix.durations,
+      depotStartTime: dto.depotStartTime,
+      depotEndTime: dto.depotEndTime,
+      vehicleCapacity: dto.vehicleCapacity ?? 16,
+    };
   }
 
   /**
@@ -213,19 +252,23 @@ export class ShuttleOptimizerService {
       };
     });
 
-    // Tính giờ về depot (điểm lên xe khách chính):
-    //   = giờ rời khách cuối + thời gian leg cuối từ khách cuối → depot
+    const finalDepot = endDepotNode(instance);
+    const endIdx = endDepotMatrixIdx(instance);
+
+    // Tính giờ đến depot kết thúc:
+    //   = giờ rời khách cuối + thời gian leg cuối từ khách cuối -> depot kết thúc
     const n = solution.route.length;
-    let depotArrivalTime = instance.depotStartTime;
-    if (n > 0) {
-      const lastCustomerIdx = solution.route[n - 1];
-      const lastDeparture =
-        (solution.arrivalTimes[n - 1] ?? 0) +
-        instance.customers[lastCustomerIdx].serviceTime;
-      const lastLegDuration =
-        instance.durationMatrix[lastCustomerIdx + 1]?.[0] ?? 0;
-      depotArrivalTime = lastDeparture + lastLegDuration;
-    }
+    const lastMatrixIdx = n > 0 ? solution.route[n - 1] + 1 : 0;
+    const lastDeparture =
+      n > 0
+        ? (solution.arrivalTimes[n - 1] ?? 0) +
+          instance.customers[solution.route[n - 1]].serviceTime
+        : instance.depotStartTime;
+    const lastLegDuration =
+      instance.durationMatrix[lastMatrixIdx]?.[endIdx] ?? 0;
+    const depotArrivalTime = lastDeparture + lastLegDuration;
+    const endDepotDistanceFromPrev =
+      instance.distanceMatrix[lastMatrixIdx]?.[endIdx] ?? 0;
 
     return {
       solverName: solution.solverName,
@@ -236,11 +279,36 @@ export class ShuttleOptimizerService {
       runtimeMs: solution.runtimeMs,
       depotName: instance.depot.name,
       depotCoordinates: instance.depot.coordinates,
+      endDepotName: finalDepot.name,
+      endDepotCoordinates: finalDepot.coordinates,
       depotDepartureTime: instance.depotStartTime,
       depotArrivalTime,
       depotEndWindow: instance.depotEndTime,
+      endDepotDistanceFromPrev,
       steps,
       routeGeometry,
+    };
+  }
+
+  private toNode(
+    input: CustomerInputDto,
+    defaultServiceTime: number,
+  ): TSPTWNode {
+    if (input.latestPickup < input.earliestPickup) {
+      throw new BadRequestException(
+        `latestPickup phải >= earliestPickup cho node '${input.id}'`,
+      );
+    }
+
+    return {
+      id: input.id,
+      name: input.name,
+      coordinates: input.coordinates,
+      serviceTime: input.serviceTime ?? defaultServiceTime,
+      timeWindow: {
+        earliest: input.earliestPickup,
+        latest: input.latestPickup,
+      },
     };
   }
 }
