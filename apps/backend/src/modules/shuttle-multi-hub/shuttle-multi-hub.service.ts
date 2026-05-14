@@ -5,7 +5,11 @@ import {
   MultiHubGenerateConfig,
   MultiHubInstanceGenerator,
 } from './benchmark/instance-generator';
-import { buildSeedInstance } from './benchmark/seed-data';
+import {
+  buildSeedInstance,
+  SEED_HUB_BXMD,
+  SEED_HUB_BXMT,
+} from './benchmark/seed-data';
 import { SolveMultiHubRequestDto } from './dto/solve-request.dto';
 import {
   MultiHubSolveResponseDto,
@@ -47,6 +51,33 @@ export class ShuttleMultiHubService {
 
   listSolvers(): string[] {
     return Array.from(this.solvers.keys());
+  }
+
+  /**
+   * Lấy polyline đường thật BXMT ↔ BXMĐ qua OSRM để vẽ tuyến xe khách chính
+   * trên bản đồ (thay cho đường thẳng chim bay).
+   *
+   * Trả `null` nếu OSRM không khả dụng — frontend sẽ tự fallback.
+   */
+  async getMainRouteGeometry(): Promise<{
+    from: [number, number];
+    to: [number, number];
+    geometry: [number, number][] | null;
+  }> {
+    if (!this.osrmService.isAvailable()) {
+      return { from: SEED_HUB_BXMT, to: SEED_HUB_BXMD, geometry: null };
+    }
+
+    const geometry = await this.osrmService.getRouteGeometry([
+      { lng: SEED_HUB_BXMT[0], lat: SEED_HUB_BXMT[1] },
+      { lng: SEED_HUB_BXMD[0], lat: SEED_HUB_BXMD[1] },
+    ]);
+
+    return {
+      from: SEED_HUB_BXMT,
+      to: SEED_HUB_BXMD,
+      geometry,
+    };
   }
 
   async solveDemo(

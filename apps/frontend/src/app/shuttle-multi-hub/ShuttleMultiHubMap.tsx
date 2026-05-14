@@ -40,6 +40,11 @@ export interface ShuttleBranch {
 export interface ShuttleMultiHubMapProps {
   /** Tối đa 2 shuttle (1 cho BXMT, 1 cho BXMĐ). Có thể rỗng. */
   branches: ShuttleBranch[];
+  /**
+   * Polyline đường thật BXMT ↔ BXMĐ từ OSRM ([lng, lat][]).
+   * Nếu undefined → vẽ đường thẳng chim bay (fallback).
+   */
+  mainRouteGeometry?: [number, number][] | null;
 }
 
 /** Tạo DivIcon tròn có label */
@@ -73,15 +78,28 @@ function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
   return null;
 }
 
-export default function ShuttleMultiHubMap({ branches }: ShuttleMultiHubMapProps) {
+export default function ShuttleMultiHubMap({
+  branches,
+  mainRouteGeometry,
+}: ShuttleMultiHubMapProps) {
   const bxmtLatLng: LatLngExpression = [HUB_BXMT[1], HUB_BXMT[0]];
   const bxmdLatLng: LatLngExpression = [HUB_BXMD[1], HUB_BXMD[0]];
 
-  /** Red dashed line: tuyến xe khách chính BXMT ↔ BXMĐ */
-  const mainRouteLatLngs: LatLngExpression[] = useMemo(
-    () => [bxmtLatLng, bxmdLatLng],
+  /**
+   * Red line tuyến chính: ưu tiên OSRM polyline (đường thật).
+   * Fallback đường thẳng chim bay nếu không có geometry.
+   */
+  const mainRouteLatLngs: LatLngExpression[] = useMemo(() => {
+    if (mainRouteGeometry && mainRouteGeometry.length >= 2) {
+      return mainRouteGeometry.map(
+        ([lng, lat]) => [lat, lng] as LatLngExpression,
+      );
+    }
+    return [bxmtLatLng, bxmdLatLng];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  }, [mainRouteGeometry]);
+  const usingOsrmMain = Boolean(
+    mainRouteGeometry && mainRouteGeometry.length >= 2,
   );
 
   /** Auto-fit bounds: bao gồm cả 2 hub + tất cả customer trong các branch */
@@ -117,7 +135,8 @@ export default function ShuttleMultiHubMap({ branches }: ShuttleMultiHubMapProps
           color: '#dc2626',
           weight: 5,
           opacity: 0.9,
-          dashArray: '12, 8',
+          // Đường thật từ OSRM = solid. Đường chim bay fallback = dashed.
+          dashArray: usingOsrmMain ? undefined : '12, 8',
         }}
       >
         <Popup>
@@ -126,6 +145,12 @@ export default function ShuttleMultiHubMap({ branches }: ShuttleMultiHubMapProps
           Bến Xe Miền Tây ↔ Bến Xe Miền Đông
           <br />
           (xe khách → Hà Nội)
+          <br />
+          <em style={{ fontSize: 11 }}>
+            {usingOsrmMain
+              ? `Đường thật từ OSRM (${mainRouteGeometry?.length ?? 0} điểm)`
+              : 'Đường chim bay (OSRM offline)'}
+          </em>
         </Popup>
       </Polyline>
 

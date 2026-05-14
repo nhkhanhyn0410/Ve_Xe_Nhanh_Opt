@@ -23,6 +23,21 @@ export class ShuttleMultiHubController {
     return { solvers: this.service.listSolvers() };
   }
 
+  @Get('main-route')
+  @ApiOperation({
+    summary: 'Polyline OSRM của tuyến chính BXMT ↔ BXMĐ',
+    description:
+      'Trả về geometry GeoJSON [lng, lat][] để vẽ đường thật trên map. ' +
+      'geometry = null khi OSRM không khả dụng → frontend fallback đường thẳng.',
+  })
+  async mainRoute(): Promise<{
+    from: [number, number];
+    to: [number, number];
+    geometry: [number, number][] | null;
+  }> {
+    return this.service.getMainRouteGeometry();
+  }
+
   @Get('seed')
   @ApiOperation({
     summary:

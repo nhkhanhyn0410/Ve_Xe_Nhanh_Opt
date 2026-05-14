@@ -146,10 +146,8 @@ function toRouteRows(data: MultiHubResponse | null): RouteTableRow[] {
   return data.routes.map((route) => ({
     key: route.vehicleId,
     vehicleName: route.vehicleName,
-    hub:
-      route.depotName === route.endDepotName
-        ? route.depotName
-        : `${route.depotName} → ${route.endDepotName}`,
+    // LUÔN hiển thị explicit "from → to" để debug VRPTW (kể cả khi cùng depot)
+    hub: `${route.depotName} → ${route.endDepotName}`,
     stops: route.customerCount,
     load: route.load,
     totalDistance: route.totalDistance,
@@ -160,12 +158,43 @@ function toRouteRows(data: MultiHubResponse | null): RouteTableRow[] {
   }));
 }
 
+interface MainRouteResponse {
+  from: [number, number];
+  to: [number, number];
+  geometry: [number, number][] | null;
+}
+
 export default function ShuttleMultiHubView() {
   const [source, setSource] = useState<DataSource>('seed');
   const [params, setParams] = useState<DemoParams>(DEFAULT_PARAMS);
   const [data, setData] = useState<MultiHubResponse | null>(null);
+  const [mainRoute, setMainRoute] = useState<MainRouteResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Fetch tuyến chính 1 lần khi mount — không phụ thuộc params
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/shuttle-multi-hub/main-route`);
+        if (!res.ok) return;
+        const json = (await res.json()) as
+          | Envelope<MainRouteResponse>
+          | MainRouteResponse;
+        const payload =
+          'success' in json && json.success && 'data' in json
+            ? json.data
+            : (json as MainRouteResponse);
+        if (!cancelled) setMainRoute(payload);
+      } catch {
+        // Im lặng — map sẽ fallback đường thẳng
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const fetchData = useCallback(
     async (src: DataSource, nextParams: DemoParams) => {
@@ -401,7 +430,10 @@ export default function ShuttleMultiHubView() {
             >
               <div style={{ height: 550 }}>
                 {branches.length > 0 ? (
-                  <ShuttleMultiHubMap branches={branches} />
+                  <ShuttleMultiHubMap
+                    branches={branches}
+                    mainRouteGeometry={mainRoute?.geometry ?? undefined}
+                  />
                 ) : (
                   <div
                     style={{
@@ -495,40 +527,118 @@ export default function ShuttleMultiHubView() {
                     </Text>
                   );
                 }
+
+                // Build rows: XP depot → N customers → VỀ depot
+                type DetailRow = {
+                  key: string;
+                  kind: 'depot-start' | 'customer' | 'depot-end';
+                  label: string;
+                  arrivalTime: number;
+                  departureTime: number;
+                  distanceFromPrev: number;
+                  coordinates: [number, number];
+                  timeWindow?: [number, number];
+                  isLate?: boolean;
+                };
+                const firstStep = route.steps[0];
+                const lastStep = route.steps[route.steps.length - 1];
+                const detailRows: DetailRow[] = [
+                  {
+                    key: `${row.key}-depot-start`,
+                    kind: 'depot-start',
+                    label: `${route.depotName} (xuất phát)`,
+                    arrivalTime: 0,
+                    // Giờ rời depot = arrival của khách đầu - duration leg đầu.
+                    // Không có sẵn → để empty, hiển thị "—"
+                    departureTime: firstStep ? firstStep.arrivalTime : 0,
+                    distanceFromPrev: 0,
+                    coordinates: route.depotCoordinates,
+                  },
+                  ...route.steps.map((s, idx) => ({
+                    key: `${row.key}-${s.customerId}`,
+                    kind: 'customer' as const,
+                    label: `${idx + 1}. ${s.customerName}`,
+                    arrivalTime: s.arrivalTime,
+                    departureTime: s.departureTime,
+                    distanceFromPrev: s.distanceFromPrev,
+                    coordinates: s.coordinates,
+                    timeWindow: s.timeWindow,
+                    isLate: s.arrivalTime > s.timeWindow[1],
+                  })),
+                  {
+                    key: `${row.key}-depot-end`,
+                    kind: 'depot-end',
+                    label: `${route.endDepotName} (về bến, lên xe khách chính)`,
+                    arrivalTime: route.depotArrivalTime,
+                    departureTime: 0,
+                    distanceFromPrev:
+                      route.totalDistance -
+                      route.steps.reduce(
+                        (sum, s) => sum + s.distanceFromPrev,
+                        0,
+                      ),
+                    coordinates: route.endDepotCoordinates,
+                    isLate: false,
+                  },
+                ];
+                void lastStep; // (giữ reference, có thể dùng để compute thêm sau)
+
                 return (
-                  <Table<MultiHubStep & { idx: number }>
+                  <Table<DetailRow>
                     size="small"
                     pagination={false}
-                    rowKey={(s) => `${row.key}-${s.customerId}`}
-                    dataSource={route.steps.map((s, idx) => ({ ...s, idx }))}
+                    rowKey="key"
+                    dataSource={detailRows}
+                    onRow={(r) => ({
+                      style:
+                        r.kind !== 'customer'
+                          ? { background: '#fff7e6' }
+                          : undefined,
+                    })}
                     columns={[
                       {
                         title: '#',
-                        dataIndex: 'idx',
-                        width: 48,
-                        render: (idx: number) => (
-                          <Tag color={route.color}>{idx + 1}</Tag>
-                        ),
+                        width: 56,
+                        render: (_, r) =>
+                          r.kind === 'depot-start' ? (
+                            <Tag color="red">XP</Tag>
+                          ) : r.kind === 'depot-end' ? (
+                            <Tag color="red">VỀ</Tag>
+                          ) : (
+                            <Tag color={route.color}>
+                              {detailRows
+                                .filter((x) => x.kind === 'customer')
+                                .indexOf(r) + 1}
+                            </Tag>
+                          ),
                       },
                       {
-                        title: 'Khách',
-                        dataIndex: 'customerName',
+                        title: 'Điểm',
+                        dataIndex: 'label',
+                        render: (label: string, r) =>
+                          r.kind === 'customer' ? (
+                            label
+                          ) : (
+                            <Text strong>{label}</Text>
+                          ),
                       },
                       {
                         title: 'TW yêu cầu',
                         dataIndex: 'timeWindow',
-                        render: (tw: [number, number]) =>
-                          `${minutesToHHMM(tw[0])} – ${minutesToHHMM(tw[1])}`,
                         width: 130,
+                        render: (tw?: [number, number]) =>
+                          tw
+                            ? `${minutesToHHMM(tw[0])} – ${minutesToHHMM(tw[1])}`
+                            : '—',
                       },
                       {
                         title: 'Đến',
                         dataIndex: 'arrivalTime',
                         width: 80,
-                        render: (v: number, s) => {
-                          const late = v > s.timeWindow[1];
+                        render: (v: number, r) => {
+                          if (r.kind === 'depot-start') return '—';
                           const txt = minutesToHHMM(v);
-                          return late ? (
+                          return r.isLate ? (
                             <Text type="danger" strong>
                               {txt} ⚠
                             </Text>
@@ -541,13 +651,15 @@ export default function ShuttleMultiHubView() {
                         title: 'Rời',
                         dataIndex: 'departureTime',
                         width: 80,
-                        render: (v: number) => minutesToHHMM(v),
+                        render: (v: number, r) =>
+                          r.kind === 'depot-end' ? '—' : minutesToHHMM(v),
                       },
                       {
                         title: 'Quãng trước (km)',
                         dataIndex: 'distanceFromPrev',
                         width: 140,
-                        render: (v: number) => v.toFixed(2),
+                        render: (v: number, r) =>
+                          r.kind === 'depot-start' ? '—' : v.toFixed(2),
                       },
                       {
                         title: 'Tọa độ',
