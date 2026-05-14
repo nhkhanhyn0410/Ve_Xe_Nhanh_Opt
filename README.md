@@ -129,7 +129,22 @@ npm run dev:frontend
 ### 8.5 Chạy bằng Docker
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+npm run docker:dev
+```
+
+Lệnh này build và chạy toàn bộ stack:
+
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:5501/api/v1
+- Swagger: http://localhost:5501/api/docs
+- Mongo Express: http://localhost:8082
+
+Các lệnh Docker thường dùng:
+
+```bash
+npm run docker:build
+npm run docker:logs
+npm run docker:down
 ```
 
 ## 9. Đối tượng hướng tới và ý nghĩa thực tiễn
