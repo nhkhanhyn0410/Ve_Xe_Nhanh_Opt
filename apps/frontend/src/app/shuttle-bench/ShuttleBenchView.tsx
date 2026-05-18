@@ -184,22 +184,51 @@ export default function ShuttleBenchView() {
   return (
     <div style={{ padding: 24, maxWidth: 1400, margin: '0 auto' }}>
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
-        <div>
-          <Title level={2} style={{ marginBottom: 4 }}>
-            Shuttle Bench — So sánh 6 solver TSPTW
+        <Card
+          style={{
+            background:
+              'linear-gradient(135deg, #1677ff 0%, #722ed1 100%)',
+            border: 'none',
+          }}
+          styles={{ body: { padding: '20px 24px' } }}
+        >
+          <Title
+            level={2}
+            style={{
+              marginBottom: 4,
+              color: '#ffffff',
+              fontWeight: 700,
+            }}
+          >
+            🏁 Shuttle Bench — So sánh 6 solver TSPTW
           </Title>
-          <Text type="secondary">
-            Chạy benchmark batch: <code>sizes × seeds × solvers</code> →
-            aggregate metrics → so sánh + chọn solver tốt nhất cho báo cáo.
+          <Text style={{ color: 'rgba(255, 255, 255, 0.92)', fontSize: 14 }}>
+            Chạy benchmark batch:{' '}
+            <code
+              style={{
+                background: 'rgba(255,255,255,0.18)',
+                padding: '2px 8px',
+                borderRadius: 4,
+                color: '#fff',
+              }}
+            >
+              sizes × seeds × solvers
+            </code>{' '}
+            → aggregate metrics → so sánh + chọn solver tốt nhất cho báo cáo.
           </Text>
-        </div>
+        </Card>
 
         {/* ─── HƯỚNG DẪN ─── */}
         <Collapse
+          style={{ background: '#fff' }}
           items={[
             {
               key: 'help',
-              label: '📖 Hướng dẫn dùng & diễn giải metrics (bấm để mở)',
+              label: (
+                <span style={{ color: '#000', fontWeight: 600 }}>
+                  📖 Hướng dẫn dùng & diễn giải metrics (bấm để mở)
+                </span>
+              ),
               children: <BenchHelp />,
             },
           ]}
