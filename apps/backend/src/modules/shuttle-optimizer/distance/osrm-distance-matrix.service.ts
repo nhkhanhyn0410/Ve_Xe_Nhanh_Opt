@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { OsrmService } from '../../osrm/osrm.service';
 
 export interface DistanceMatrixResult {
   /** Ma trận distance (km) */
@@ -27,7 +28,9 @@ export interface DistanceMatrixResult {
  */
 @Injectable()
 export class OsrmDistanceMatrixService {
-  // private readonly logger = new Logger(OsrmDistanceMatrixService.name);
+  private readonly logger = new Logger(OsrmDistanceMatrixService.name);
+
+  constructor(private readonly osrm: OsrmService) {}
 
   /**
    * Lấy distance matrix cho danh sách tọa độ.
@@ -35,14 +38,63 @@ export class OsrmDistanceMatrixService {
    *                    N+1 có thể là depot kết thúc
    */
   /**
-   * Lấy distance matrix cho danh sách tọa độ.
-   * Chiến lược: thử OSRM /table trước → fallback Haversine nếu OSRM lỗi.
-   * Hiện tại dùng Haversine luôn (OSRM chưa được implement).
+   * Lấy distance matrix cho danh sách tọa độ ([lng, lat]).
+   * Chiến lược: thử OSRM /table trước → fallback Haversine khi OSRM không
+   * khả dụng hoặc trả ô null (điểm ngoài vùng bản đồ extract đã nạp).
    */
-  getMatrix(
+  async getMatrix(
     coordinates: Array<[number, number]>,
   ): Promise<DistanceMatrixResult> {
-    return Promise.resolve(this.buildHaversineMatrix(coordinates));
+    const viaOsrm = await this.tryOsrmMatrix(coordinates);
+    return viaOsrm ?? this.buildHaversineMatrix(coordinates);
+  }
+
+  /**
+   * Lấy ma trận từ OSRM /table. Trả null (→ caller fallback Haversine) khi:
+   *   - OSRM không khả dụng (isAvailable() = false), hoặc
+   *   - /table lỗi, hoặc
+   *   - bất kỳ ô nào null (cặp điểm không định tuyến được / ngoài extract).
+   * Đổi đơn vị mét → km, giây → phút; làm tròn ĐỒNG NHẤT với nhánh
+   * Haversine (2 chữ số km, 1 chữ số phút) để định dạng số trong báo cáo
+   * không phụ thuộc nguồn ma trận.
+   */
+  private async tryOsrmMatrix(
+    coordinates: Array<[number, number]>,
+  ): Promise<DistanceMatrixResult | null> {
+    if (!this.osrm.isAvailable()) return null;
+
+    const points = coordinates.map(([lng, lat]) => ({ lng, lat }));
+    const table = await this.osrm.getDistanceMatrix(points, points);
+    if (!table) return null;
+
+    const n = coordinates.length;
+    const distances: number[][] = Array.from({ length: n }, (): number[] =>
+      new Array<number>(n).fill(0),
+    );
+    const durations: number[][] = Array.from({ length: n }, (): number[] =>
+      new Array<number>(n).fill(0),
+    );
+
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        if (i === j) continue;
+        const cell = table[i]?.[j];
+        if (
+          !cell ||
+          cell.distanceMeters == null ||
+          cell.durationSeconds == null
+        ) {
+          this.logger.warn(
+            `OSRM /table trả ô null tại [${i}][${j}] — fallback Haversine toàn ma trận`,
+          );
+          return null;
+        }
+        distances[i][j] = Math.round((cell.distanceMeters / 1000) * 100) / 100;
+        durations[i][j] = Math.round((cell.durationSeconds / 60) * 10) / 10;
+      }
+    }
+
+    return { distances, durations, source: 'osrm' };
   }
 
   /**

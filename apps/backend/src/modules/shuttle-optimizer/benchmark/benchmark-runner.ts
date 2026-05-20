@@ -166,7 +166,7 @@ export class BenchmarkRunner {
             const sol = await this.runOnce(
               refSolver,
               inst,
-              config.solverConfig,
+              this.withInstanceSeed(config.solverConfig, inst),
             );
             refResults.set(inst.id, sol);
           } catch (e) {
@@ -191,7 +191,11 @@ export class BenchmarkRunner {
             const sol =
               solverName === refName && refResults.has(inst.id)
                 ? refResults.get(inst.id)!
-                : await this.runOnce(solver, inst, config.solverConfig);
+                : await this.runOnce(
+                    solver,
+                    inst,
+                    this.withInstanceSeed(config.solverConfig, inst),
+                  );
 
             const ref = refResults.get(inst.id);
             const gap = this.computeGap(sol, ref);
@@ -355,6 +359,26 @@ export class BenchmarkRunner {
       solverConfig: input?.solverConfig ?? {},
       maxBruteForceN: input?.maxBruteForceN ?? 12,
     };
+  }
+
+  /**
+   * Gắn seed của instance vào solver config để metaheuristic ngẫu nhiên
+   * (ACO + 2-opt, Simulated Annealing) trở nên TẤT ĐỊNH & tái lập 100%.
+   *
+   * Trước đây benchmark chỉ truyền `solverConfig` (vd `{timeLimitMs:3000}`)
+   * không kèm seed → ACO/SA fallback `Date.now()` → mỗi lần chạy ra số khác
+   * nhau, cột std trộn lẫn nhiễu instance + nhiễu RNG, không tái lập được.
+   *
+   * Nay mỗi solver chạy trên instance có id `...-s{seed}` sẽ nhận đúng
+   * seed đó: cùng (N, seed) → cùng kết quả. Không ghi đè nếu caller đã
+   * chỉ định seed tường minh trong solverConfig.
+   */
+  private withInstanceSeed(
+    base: SolverConfig,
+    instance: TSPTWInstance,
+  ): SolverConfig {
+    if (base.seed !== undefined) return base;
+    return { ...base, seed: this.extractSeed(instance.id) };
   }
 
   /** Trích seed từ id `gen-N{n}-r{r}-w{w}-s{seed}`. */

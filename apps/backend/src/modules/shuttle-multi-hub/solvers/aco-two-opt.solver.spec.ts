@@ -16,7 +16,12 @@ function assignedCustomerSet(solution: VrptwSolution): Set<number> {
 }
 
 describe('ACO+2Opt multi-hub solvers', () => {
-  const distanceService = new OsrmDistanceMatrixService();
+  // Stub OSRM = không khả dụng → service dùng Haversine y như trước.
+  const distanceService = new OsrmDistanceMatrixService({
+    isAvailable: () => false,
+  } as unknown as ConstructorParameters<
+    typeof OsrmDistanceMatrixService
+  >[0]);
   const generator = new MultiHubInstanceGenerator(distanceService);
   const twoOpt = new TwoOptVrptwSolver();
   const vrptwSolver = new AcoTwoOptVrptwSolver(twoOpt);

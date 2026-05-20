@@ -121,13 +121,39 @@ export class ShuttleMultiHubService {
     this.logger.log(
       `[${instance.mode}] Solving N=${instance.customers.length}, V=${instance.vehicles.length} with ${solver.name}`,
     );
-    const solution = await solver.solve(instance, solverConfig);
+    const solution = await solver.solve(
+      instance,
+      this.withInstanceSeed(solverConfig, instance),
+    );
     const geometries = await this.fetchRouteGeometries(instance, solution);
     return this.toResponseDto(instance, solution, geometries);
   }
 
   private defaultSolverName(mode: MultiHubMode): string {
     return mode === 'mdvrptw' ? 'aco-2opt-mdvrptw' : 'aco-2opt-vrptw';
+  }
+
+  /**
+   * Gắn seed của instance vào solver config để ACO + 2-opt VRPTW/MDVRPTW
+   * TẤT ĐỊNH & tái lập 100%.
+   *
+   * Trước đây các path demo/seed không truyền `solverConfig` → solver
+   * fallback `config?.seed ?? Date.now()` (aco-two-opt-vrptw.solver.ts) →
+   * mỗi lần chạy ra số khác nhau, TN4/TN5 không tái lập được.
+   *
+   * Nay seed lấy từ id instance (`...-s{seed}`); với seed-data cố định
+   * không có hậu tố seed thì dùng hằng số ổn định 42. Không ghi đè nếu
+   * caller đã chỉ định seed tường minh.
+   */
+  private withInstanceSeed(
+    config: AcoTwoOptConfig | undefined,
+    instance: VrptwInstance,
+  ): AcoTwoOptConfig {
+    const base: AcoTwoOptConfig = config ?? {};
+    if (base.seed !== undefined) return base;
+    const m = instance.id.match(/-s(-?\d+)$/);
+    const seed = m ? parseInt(m[1], 10) : 42;
+    return { ...base, seed };
   }
 
   private async buildInstance(
