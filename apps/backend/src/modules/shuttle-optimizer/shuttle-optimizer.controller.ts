@@ -171,7 +171,7 @@ export class ShuttleOptimizerController {
     description:
       'Tune ACO trên N customer cố định × M seed × |α| × |β| × |ρ| configs. ' +
       'Mỗi config chạy M ACO + so với reference (BF nếu N ≤ 12, else OR-Tools) để tính gap. ' +
-      'Default: N=10, seeds=[1..5], α∈[0.5,1,2], β∈[2,3,5], ρ∈[0.1,0.2] → 18 configs × 5 seeds = 90 runs ACO. ' +
+      'Default: N=10, seeds=[1..5], α∈[0.5,1,1.5,2], β∈[2,3,4,5], ρ∈[0.05,0.1,0.2,0.3] → 64 configs × 5 seeds = 320 runs ACO. ' +
       'Có thể mất vài phút. Trả về results sorted theo avgGap asc.',
   })
   async tuneAco(@Body() body: AcoTuneConfig): Promise<AcoTuneReport> {

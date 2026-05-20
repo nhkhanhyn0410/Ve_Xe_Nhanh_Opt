@@ -2,7 +2,12 @@ import { InstanceGenerator } from './instance-generator';
 import { OsrmDistanceMatrixService } from '../distance/osrm-distance-matrix.service';
 
 describe('InstanceGenerator', () => {
-  const distanceService = new OsrmDistanceMatrixService();
+  // Stub OSRM = không khả dụng → service dùng Haversine y như trước.
+  const distanceService = new OsrmDistanceMatrixService({
+    isAvailable: () => false,
+  } as unknown as ConstructorParameters<
+    typeof OsrmDistanceMatrixService
+  >[0]);
   const gen = new InstanceGenerator(distanceService);
 
   it('sinh đủ N customer + 1 depot', async () => {

@@ -2,9 +2,10 @@ import { TSPTWInstance } from '../models/tsptw-instance';
 
 /**
  * Dữ liệu demo — 10 điểm đón thực tế ở TPHCM.
- * Shuttle xuất phát tại Bến Xe Miền Tây và kết thúc ở Bến Xe Miền Đông.
+ * Shuttle xuất phát VÀ quay về Bến Xe Miền Tây — lộ trình ĐÓNG (closed TSPTW),
+ * ĐỒNG NHẤT với instance random của InstanceGenerator (không khai báo endDepot).
  * Xe khách chính khởi hành 7:00 (420 phút).
- * Xe shuttle xuất phát 5:00 (300 phút), phải về trước 6:40 (400 phút).
+ * Xe shuttle xuất phát 5:00 (300 phút), phải quay về trước 6:40 (400 phút).
  *
  * Tọa độ [lng, lat] — chuẩn GeoJSON.
  * Time window tính bằng phút từ 00:00.
@@ -25,13 +26,8 @@ export const DEMO_SEED: Omit<
     serviceTime: 0,
     timeWindow: { earliest: 300, latest: 420 },
   },
-  endDepot: {
-    id: 'depot-bxmd',
-    name: 'Bến Xe Miền Đông',
-    coordinates: [106.7116, 10.8163],
-    serviceTime: 0,
-    timeWindow: { earliest: 300, latest: 420 },
-  },
+  // Không khai báo endDepot → closed TSPTW: shuttle quay về ĐÚNG depot xuất
+  // phát (Bến Xe Miền Tây), đồng nhất hành vi với instance random.
   customers: [
     {
       id: 'c1',

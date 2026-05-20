@@ -53,7 +53,13 @@ export class OperatorsController {
   @ApiOperation({ summary: 'Danh sách nhà xe' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
-  @ApiQuery({ name: 'status', required: false, enum: OperatorStatus })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: OperatorStatus,
+    enumName: 'OperatorStatus',
+    type: String,
+  })
   @ApiQuery({ name: 'search', required: false, type: String })
   async findAll(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,

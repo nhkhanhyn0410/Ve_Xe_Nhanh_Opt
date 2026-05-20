@@ -10,7 +10,12 @@ import { OrToolsSolver } from '../solvers/or-tools.solver';
 
 describe('BenchmarkRunner', () => {
   // Wire toàn bộ DI graph thủ công (không qua NestJS module)
-  const distanceService = new OsrmDistanceMatrixService();
+  // Stub OSRM = không khả dụng → service dùng Haversine y như trước.
+  const distanceService = new OsrmDistanceMatrixService({
+    isAvailable: () => false,
+  } as unknown as ConstructorParameters<
+    typeof OsrmDistanceMatrixService
+  >[0]);
   const generator = new InstanceGenerator(distanceService);
   const greedy = new GreedySolver();
   const bruteForce = new BruteForceSolver();

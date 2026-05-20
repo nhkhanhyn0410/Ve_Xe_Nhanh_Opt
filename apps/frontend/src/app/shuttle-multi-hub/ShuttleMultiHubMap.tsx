@@ -1,14 +1,7 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Polyline,
-  Popup,
-  useMap,
-} from 'react-leaflet';
+import { Fragment, useEffect, useMemo } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
 import L, { LatLngBoundsExpression, LatLngExpression } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
@@ -17,7 +10,7 @@ import 'leaflet/dist/leaflet.css';
  * Tuyến chính: BXMT → BXMĐ → ra Hà Nội.
  */
 export const HUB_BXMT: [number, number] = [106.6232, 10.7411]; // Bến Xe Miền Tây
-export const HUB_BXMD: [number, number] = [106.7116, 10.8163]; // Bến Xe Miền Đông
+export const HUB_BXMD: [number, number] = [106.815484, 10.880216]; // Bến Xe Miền Đông
 
 export interface MapStep {
   customerId: string;
@@ -36,6 +29,7 @@ export interface ShuttleBranch {
   depotName: string;
   endDepot?: [number, number];
   endDepotName?: string;
+  vehicleName?: string;
   steps: MapStep[];
   /** Polyline đường thật từ OSRM nếu có. */
   routeGeometry?: [number, number][];
@@ -46,6 +40,11 @@ export interface ShuttleBranch {
 export interface ShuttleMultiHubMapProps {
   /** Tối đa 2 shuttle (1 cho BXMT, 1 cho BXMĐ). Có thể rỗng. */
   branches: ShuttleBranch[];
+  /**
+   * Polyline đường thật BXMT ↔ BXMĐ từ OSRM ([lng, lat][]).
+   * Nếu undefined → vẽ đường thẳng chim bay (fallback).
+   */
+  mainRouteGeometry?: [number, number][] | null;
 }
 
 /** Tạo DivIcon tròn có label */
@@ -81,15 +80,26 @@ function FitBounds({ bounds }: { bounds: LatLngBoundsExpression }) {
 
 export default function ShuttleMultiHubMap({
   branches,
+  mainRouteGeometry,
 }: ShuttleMultiHubMapProps) {
   const bxmtLatLng: LatLngExpression = [HUB_BXMT[1], HUB_BXMT[0]];
   const bxmdLatLng: LatLngExpression = [HUB_BXMD[1], HUB_BXMD[0]];
 
-  /** Red dashed line: tuyến xe khách chính BXMT ↔ BXMĐ */
-  const mainRouteLatLngs: LatLngExpression[] = useMemo(
-    () => [bxmtLatLng, bxmdLatLng],
+  /**
+   * Red line tuyến chính: ưu tiên OSRM polyline (đường thật).
+   * Fallback đường thẳng chim bay nếu không có geometry.
+   */
+  const mainRouteLatLngs: LatLngExpression[] = useMemo(() => {
+    if (mainRouteGeometry && mainRouteGeometry.length >= 2) {
+      return mainRouteGeometry.map(
+        ([lng, lat]) => [lat, lng] as LatLngExpression,
+      );
+    }
+    return [bxmtLatLng, bxmdLatLng];
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+  }, [mainRouteGeometry]);
+  const usingOsrmMain = Boolean(
+    mainRouteGeometry && mainRouteGeometry.length >= 2,
   );
 
   /** Auto-fit bounds: bao gồm cả 2 hub + tất cả customer trong các branch */
@@ -101,19 +111,14 @@ export default function ShuttleMultiHubMap({
     branches.forEach((br) => {
       const endDepot = br.endDepot ?? br.depot;
       points.push([endDepot[1], endDepot[0]]);
-      br.steps.forEach((s) =>
-        points.push([s.coordinates[1], s.coordinates[0]]),
-      );
+      br.steps.forEach((s) => points.push([s.coordinates[1], s.coordinates[0]]));
     });
     return points;
   }, [branches]);
 
   return (
     <MapContainer
-      center={[
-        (HUB_BXMT[1] + HUB_BXMD[1]) / 2,
-        (HUB_BXMT[0] + HUB_BXMD[0]) / 2,
-      ]}
+      center={[(HUB_BXMT[1] + HUB_BXMD[1]) / 2, (HUB_BXMT[0] + HUB_BXMD[0]) / 2]}
       zoom={11}
       style={{ height: '100%', width: '100%' }}
       scrollWheelZoom
@@ -130,7 +135,8 @@ export default function ShuttleMultiHubMap({
           color: '#dc2626',
           weight: 5,
           opacity: 0.9,
-          dashArray: '12, 8',
+          // Đường thật từ OSRM = solid. Đường chim bay fallback = dashed.
+          dashArray: usingOsrmMain ? undefined : '12, 8',
         }}
       >
         <Popup>
@@ -139,6 +145,12 @@ export default function ShuttleMultiHubMap({
           Bến Xe Miền Tây ↔ Bến Xe Miền Đông
           <br />
           (xe khách → Hà Nội)
+          <br />
+          <em style={{ fontSize: 11 }}>
+            {usingOsrmMain
+              ? `Đường thật từ OSRM (${mainRouteGeometry?.length ?? 0} điểm)`
+              : 'Đường chim bay (OSRM offline)'}
+          </em>
         </Popup>
       </Polyline>
 
@@ -158,28 +170,20 @@ export default function ShuttleMultiHubMap({
       {branches.map((br, branchIdx) => {
         const depotLatLng: LatLngExpression = [br.depot[1], br.depot[0]];
         const endDepot = br.endDepot ?? br.depot;
-        const endDepotLatLng: LatLngExpression = [
-          endDepot[1],
-          endDepot[0],
-        ];
-        const isOpenRoute =
-          endDepot[0] !== br.depot[0] || endDepot[1] !== br.depot[1];
+        const endDepotLatLng: LatLngExpression = [endDepot[1], endDepot[0]];
+        const isOpenRoute = endDepot[0] !== br.depot[0] || endDepot[1] !== br.depot[1];
         const shuttleLatLngs: LatLngExpression[] =
           br.routeGeometry && br.routeGeometry.length >= 2
-            ? br.routeGeometry.map(
-                ([lng, lat]) => [lat, lng] as LatLngExpression,
-              )
+            ? br.routeGeometry.map(([lng, lat]) => [lat, lng] as LatLngExpression)
             : (() => {
                 const path: LatLngExpression[] = [depotLatLng];
-                br.steps.forEach((s) =>
-                  path.push([s.coordinates[1], s.coordinates[0]]),
-                );
+                br.steps.forEach((s) => path.push([s.coordinates[1], s.coordinates[0]]));
                 path.push(endDepotLatLng);
                 return path;
               })();
 
         return (
-          <div key={`branch-${branchIdx}`}>
+          <Fragment key={`branch-${branchIdx}`}>
             {/* Shuttle polyline */}
             <Polyline
               positions={shuttleLatLngs}
@@ -190,10 +194,7 @@ export default function ShuttleMultiHubMap({
               }}
             />
             {isOpenRoute && (
-              <Marker
-                position={endDepotLatLng}
-                icon={numberedIcon('E', br.color)}
-              >
+              <Marker position={endDepotLatLng} icon={numberedIcon('E', br.color)}>
                 <Popup>
                   <strong>{br.endDepotName ?? 'Depot kết thúc'}</strong>
                 </Popup>
@@ -209,7 +210,7 @@ export default function ShuttleMultiHubMap({
                 <Popup>
                   <div style={{ minWidth: 180 }}>
                     <strong>
-                      [{br.depotName}] #{idx + 1} — {s.customerName}
+                      [{br.vehicleName ?? br.depotName}] #{idx + 1} — {s.customerName}
                     </strong>
                     <br />
                     Đến: <b>{minutesToHHMM(s.arrivalTime)}</b>
@@ -221,7 +222,7 @@ export default function ShuttleMultiHubMap({
                 </Popup>
               </Marker>
             ))}
-          </div>
+          </Fragment>
         );
       })}
 
@@ -231,7 +232,8 @@ export default function ShuttleMultiHubMap({
 }
 
 function minutesToHHMM(min: number): string {
-  const h = Math.floor(min / 60);
-  const m = Math.round(min % 60);
+  const total = Math.round(min);
+  const h = Math.floor(total / 60);
+  const m = total % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }

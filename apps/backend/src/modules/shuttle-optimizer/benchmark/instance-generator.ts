@@ -9,7 +9,7 @@ import { OsrmDistanceMatrixService } from '../distance/osrm-distance-matrix.serv
 export interface GenerateConfig {
   /** Số customer (1..30 cho hợp lý) */
   customerCount: number;
-  /** Bán kính phân bố customer quanh depot (km). Mặc định 15. */
+  /** Bán kính phân bố customer quanh depot (km). Mặc định 8 (nới vừa — đủ slack di chuyển). */
   radiusKm?: number;
   /** Tâm depot [lng, lat]. Mặc định Bến Xe Miền Đông TPHCM. */
   depotCenter?: [number, number];
@@ -23,7 +23,7 @@ export interface GenerateConfig {
   windowWidthMinutes?: number;
   /** Phút từ 00:00 — shuttle xuất phát. Mặc định 300 (5:00). */
   depotStartTime?: number;
-  /** Phút từ 00:00 — hạn về depot. Mặc định 420 (7:00). */
+  /** Phút từ 00:00 — hạn về depot. Mặc định 600 (10:00) — cửa sổ 300' để có case feasible. */
   depotEndTime?: number;
   /** Service time mỗi customer (phút). Mặc định 2. */
   serviceTime?: number;
@@ -36,7 +36,7 @@ export interface GenerateConfig {
 /**
  * Default depot — Bến Xe Miền Đông, TPHCM.
  */
-const DEFAULT_DEPOT_CENTER: [number, number] = [106.7116, 10.8163];
+const DEFAULT_DEPOT_CENTER: [number, number] = [106.815484, 10.880216];
 
 /**
  * Xấp xỉ km/độ — đủ cho bán kính nhỏ (< 50km) trong vùng nhiệt đới.
@@ -91,14 +91,14 @@ export class InstanceGenerator {
   async generate(config: GenerateConfig): Promise<TSPTWInstance> {
     const {
       customerCount,
-      radiusKm = 15,
+      radiusKm = 8,
       depotCenter = DEFAULT_DEPOT_CENTER,
       depotName = 'Random Depot',
       endDepotCenter,
       endDepotName = 'End Depot',
       windowWidthMinutes = 60,
       depotStartTime = 300,
-      depotEndTime = 420,
+      depotEndTime = 600,
       serviceTime = 2,
       vehicleCapacity = 16,
       seed = Date.now(),

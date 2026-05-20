@@ -123,12 +123,20 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
 
     time_idx = routing.RegisterTransitCallback(time_cb)
 
-    # Time dimension — slack lớn để cho phép wait
+    # Horizon = big-M. KHÔNG dùng depot_end làm trần cứng: nếu chặn cumul ≤ depot_end
+    # thì với instance bị ràng buộc chặt sẽ không tồn tại phép gán nào → OR-Tools
+    # trả None ("không tìm được nghiệm"). Đặt trần đủ lớn để SOFT upper bound (đếm
+    # vi phạm) điều khiển, đồng bộ hành vi với Greedy/2-opt/SA/ACO.
+    max_edge = max((max(row) for row in duration_int), default=0)
+    max_service = max(service_times, default=0)
+    horizon = depot_start + n * (max_edge + max_service) + depot_end + violation_penalty
+
+    # Time dimension — slack & capacity = horizon (cho phép wait & vi phạm mềm)
     routing.AddDimension(
         time_idx,
-        depot_end - depot_start,  # max slack (wait time)
-        depot_end,                # capacity = giờ về depot hạn chót
-        False,                    # don't force start cumul to 0
+        horizon,  # max slack (wait time) — không chặn cứng
+        horizon,  # capacity = big-M, KHÔNG phải depot_end (sửa lỗi mô hình)
+        False,    # don't force start cumul to 0
         "Time",
     )
     time_dim = routing.GetDimensionOrDie("Time")
@@ -150,10 +158,10 @@ def solve(data, pywrapcp, routing_enums_pb2) -> int:
     # Depot ràng buộc: xuất phát đúng giờ
     depot_index = routing.Start(0)
     time_dim.CumulVar(depot_index).SetRange(depot_start, depot_start)
-    # Hạn về depot
+    # Hạn về depot: trần cứng = horizon (big-M), không chặn ở depot_end.
     end_index = routing.End(0)
-    time_dim.CumulVar(end_index).SetMax(depot_end + violation_penalty)
-    # Add soft upper cho end index để khuyến khích về đúng giờ
+    time_dim.CumulVar(end_index).SetMax(horizon)
+    # Soft upper tại end → về trễ depot_end chỉ bị phạt, không vô nghiệm.
     time_dim.SetCumulVarSoftUpperBound(
         end_index, depot_end, violation_penalty * SCALE_DISTANCE
     )

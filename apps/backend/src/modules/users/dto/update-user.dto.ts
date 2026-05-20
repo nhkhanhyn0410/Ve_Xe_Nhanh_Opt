@@ -8,7 +8,7 @@ export class UpdateUserDto {
   @IsString()
   fullName?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ enum: Gender, enumName: 'Gender' })
   @IsOptional()
   @IsEnum(Gender)
   gender?: Gender;

@@ -1,0 +1,213 @@
+{
+  "success": true,
+  "data": {
+    "results": [
+      {
+        "alpha": 0.5,
+        "beta": 2,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 5.2
+      },
+      {
+        "alpha": 0.5,
+        "beta": 2,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4.6
+      },
+      {
+        "alpha": 0.5,
+        "beta": 3,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4.4
+      },
+      {
+        "alpha": 0.5,
+        "beta": 3,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4.4
+      },
+      {
+        "alpha": 1,
+        "beta": 2,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.8
+      },
+      {
+        "alpha": 1,
+        "beta": 2,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.29400000000001,
+        "stdDistance": 7.205722031829979,
+        "avgGap": 39.6490588977203,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4
+      },
+      {
+        "alpha": 1,
+        "beta": 5,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.54199999999999,
+        "stdDistance": 7.0285325637717575,
+        "avgGap": 40.0444670609856,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.6
+      },
+      {
+        "alpha": 2,
+        "beta": 3,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.518,
+        "stdDistance": 7.485701035975187,
+        "avgGap": 40.221982423163084,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 2.6
+      },
+      {
+        "alpha": 2,
+        "beta": 3,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.518,
+        "stdDistance": 7.485701035975187,
+        "avgGap": 40.221982423163084,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 2.8
+      },
+      {
+        "alpha": 2,
+        "beta": 5,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.518,
+        "stdDistance": 7.485701035975187,
+        "avgGap": 40.221982423163084,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.2
+      },
+      {
+        "alpha": 2,
+        "beta": 5,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.518,
+        "stdDistance": 7.485701035975187,
+        "avgGap": 40.221982423163084,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.4
+      },
+      {
+        "alpha": 1,
+        "beta": 3,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.696,
+        "stdDistance": 7.1300091164037065,
+        "avgGap": 40.29020722307915,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4.4
+      },
+      {
+        "alpha": 1,
+        "beta": 3,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.696,
+        "stdDistance": 7.1300091164037065,
+        "avgGap": 40.29020722307915,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 4
+      },
+      {
+        "alpha": 0.5,
+        "beta": 5,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 81.94399999999999,
+        "stdDistance": 6.932938049629463,
+        "avgGap": 40.68561538634445,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.4
+      },
+      {
+        "alpha": 0.5,
+        "beta": 5,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.94399999999999,
+        "stdDistance": 6.932938049629463,
+        "avgGap": 40.68561538634445,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.4
+      },
+      {
+        "alpha": 1,
+        "beta": 5,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 81.94399999999999,
+        "stdDistance": 6.932938049629463,
+        "avgGap": 40.68561538634445,
+        "feasibilityRate": 0.2,
+        "avgRuntimeMs": 3.6
+      },
+      {
+        "alpha": 2,
+        "beta": 2,
+        "rho": 0.1,
+        "runs": 5,
+        "avgDistance": 86.896,
+        "stdDistance": 11.099942792645372,
+        "avgGap": 49.794779497632135,
+        "feasibilityRate": 0.4,
+        "avgRuntimeMs": 2
+      },
+      {
+        "alpha": 2,
+        "beta": 2,
+        "rho": 0.2,
+        "runs": 5,
+        "avgDistance": 86.896,
+        "stdDistance": 11.099942792645372,
+        "avgGap": 49.794779497632135,
+        "feasibilityRate": 0.4,
+        "avgRuntimeMs": 2
+      }
+    ],
+    "bestConfig": {
+      "alpha": 0.5,
+      "beta": 2,
+      "rho": 0.1
+    },
+    "referenceSolverName": "brute-force",
+    "totalRuns": 90,
+    "totalRuntimeMs": 331
+  }
+}

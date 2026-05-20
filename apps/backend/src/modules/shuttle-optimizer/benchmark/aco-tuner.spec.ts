@@ -1,14 +1,17 @@
-import { AcoTuner } from './aco-tuner';
+import { AcoTuner, DEFAULT_ACO_TUNE_GRID } from './aco-tuner';
 import { InstanceGenerator } from './instance-generator';
 import { OsrmDistanceMatrixService } from '../distance/osrm-distance-matrix.service';
 import { GreedySolver } from '../solvers/greedy.solver';
 import { TwoOptSolver } from '../solvers/two-opt.solver';
-import { AntColonySolver } from '../solvers/ant-colony.solver';
+import { AntColonySolver, ACOConfig } from '../solvers/ant-colony.solver';
 import { BruteForceSolver } from '../solvers/brute-force.solver';
 import { OrToolsSolver } from '../solvers/or-tools.solver';
 
 describe('AcoTuner', () => {
-  const distanceService = new OsrmDistanceMatrixService();
+  // Stub OSRM = không khả dụng → service dùng Haversine y như trước.
+  const distanceService = new OsrmDistanceMatrixService({
+    isAvailable: () => false,
+  } as unknown as ConstructorParameters<typeof OsrmDistanceMatrixService>[0]);
   const generator = new InstanceGenerator(distanceService);
   const greedy = new GreedySolver();
   const twoOpt = new TwoOptSolver(greedy);
@@ -35,6 +38,7 @@ describe('AcoTuner', () => {
 
     // Reference = brute-force (N=6 ≤ 12)
     expect(report.referenceSolverName).toBe('brute-force');
+    expect(report.useLocalSearch).toBe(true);
 
     // Mỗi result có metrics
     report.results.forEach((r) => {
@@ -88,17 +92,47 @@ describe('AcoTuner', () => {
     expect(report.referenceSolverName).toBe('or-tools');
   }, 60_000);
 
-  it('grid mặc định = 18 configs', () => {
+  it('grid mặc định = 64 configs', () => {
     // Chỉ kiểm tra số lượng — không chạy đủ vì sẽ quá lâu
-    const defaultGrid = {
-      alphas: [0.5, 1.0, 2.0],
-      betas: [2, 3, 5],
-      rhos: [0.1, 0.2],
-    };
     const total =
-      defaultGrid.alphas.length *
-      defaultGrid.betas.length *
-      defaultGrid.rhos.length;
-    expect(total).toBe(18);
+      DEFAULT_ACO_TUNE_GRID.alphas.length *
+      DEFAULT_ACO_TUNE_GRID.betas.length *
+      DEFAULT_ACO_TUNE_GRID.rhos.length;
+    expect(total).toBe(64);
+  });
+
+  it('có thể tắt 2-opt local search khi cần kiểm nghiệm ACO thuần', async () => {
+    const seenConfigs: ACOConfig[] = [];
+    const fakeAco = {
+      solve: jest.fn(async (_instance, config?: ACOConfig) => {
+        if (config) seenConfigs.push(config);
+        return {
+          route: [],
+          totalDistance: 100,
+          totalDuration: 100,
+          isFeasible: true,
+          violationCount: 0,
+          arrivalTimes: [],
+          solverName: 'aco-no-2opt-test',
+          runtimeMs: 1,
+        };
+      }),
+    } as unknown as AntColonySolver;
+
+    const noTwoOptTuner = new AcoTuner(generator, fakeAco, bruteForce, orTools);
+    const report = await noTwoOptTuner.tune({
+      customerCount: 3,
+      seeds: [1],
+      alphas: [1.0],
+      betas: [3.0],
+      rhos: [0.1],
+      acoIterations: 1,
+      timeLimitPerRun: 500,
+      useLocalSearch: false,
+    });
+
+    expect(fakeAco.solve).toHaveBeenCalledTimes(1);
+    expect(seenConfigs[0].useLocalSearch).toBe(false);
+    expect(report.useLocalSearch).toBe(false);
   });
 });

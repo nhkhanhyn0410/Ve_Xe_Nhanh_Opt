@@ -10,6 +10,12 @@ import { TSPTWSolution } from '../models/tsptw-solution';
 /**
  * Config grid để tune ACO.
  */
+export const DEFAULT_ACO_TUNE_GRID = {
+  alphas: [0.5, 1.0, 1.5, 2.0],
+  betas: [2, 3, 4, 5],
+  rhos: [0.05, 0.1, 0.2, 0.3],
+} as const;
+
 export interface AcoTuneConfig {
   /** N — số customer để tune (chỉ 1 size, vì tune cho instance class này). Default 10. */
   customerCount?: number;
@@ -17,11 +23,11 @@ export interface AcoTuneConfig {
   seeds?: number[];
   /** Generator options khác. */
   generateConfig?: Omit<GenerateConfig, 'customerCount' | 'seed'>;
-  /** Grid α. Default [0.5, 1.0, 2.0]. */
+  /** Grid α. Default [0.5, 1.0, 1.5, 2.0]. */
   alphas?: number[];
-  /** Grid β. Default [2, 3, 5]. */
+  /** Grid β. Default [2, 3, 4, 5]. */
   betas?: number[];
-  /** Grid ρ (evaporation). Default [0.1, 0.2]. */
+  /** Grid ρ (evaporation). Default [0.05, 0.1, 0.2, 0.3]. */
   rhos?: number[];
   /** Số iter ACO mỗi run. Default 50 (giảm để tune nhanh). */
   acoIterations?: number;
@@ -29,6 +35,8 @@ export interface AcoTuneConfig {
   timeLimitPerRun?: number;
   /** Cận N để dùng BruteForce làm reference. Default 12. */
   maxBruteForceN?: number;
+  /** Bật/tắt 2-opt local search bên trong ACO. Default true. */
+  useLocalSearch?: boolean;
 }
 
 /**
@@ -66,6 +74,8 @@ export interface AcoTuneReport {
   totalRuns: number;
   /** Wall-clock time (ms) */
   totalRuntimeMs: number;
+  /** true = ACO+2-opt, false = ACO thuần không refine bằng 2-opt */
+  useLocalSearch: boolean;
 }
 
 /**
@@ -78,8 +88,8 @@ export interface AcoTuneReport {
  *     (slide heatmap, bảng so sánh).
  *
  * Cách dùng:
- *   - tune({ alphas: [0.5, 1, 2], betas: [2, 3, 5], rhos: [0.1, 0.2] })
- *     → 3 × 3 × 2 = 18 config × 5 seed = 90 runs ACO
+ *   - tune({})
+ *     → 4 × 4 × 4 = 64 config × 5 seed = 320 runs ACO
  *     → Trả về sorted theo avgGap, best ở [0]
  *
  * Workflow:
@@ -108,7 +118,8 @@ export class AcoTuner {
     this.logger.log(
       `ACO tune start: N=${config.customerCount}, seeds=${config.seeds.length}, ` +
         `grid α×β×ρ = ${config.alphas.length}×${config.betas.length}×${config.rhos.length} ` +
-        `= ${config.alphas.length * config.betas.length * config.rhos.length} configs`,
+        `= ${config.alphas.length * config.betas.length * config.rhos.length} configs, ` +
+        `2-opt=${config.useLocalSearch ? 'on' : 'off'}`,
     );
 
     // ─── 1. Sinh instances ────────────────────────────────────────────
@@ -197,6 +208,7 @@ export class AcoTuner {
       referenceSolverName: refSolver.name,
       totalRuns: totalCombos * config.seeds.length,
       totalRuntimeMs,
+      useLocalSearch: config.useLocalSearch,
     };
   }
 
@@ -224,6 +236,7 @@ export class AcoTuner {
         maxIterations: config.acoIterations,
         timeLimitMs: config.timeLimitPerRun,
         seed: this.extractSeed(inst.id),
+        useLocalSearch: config.useLocalSearch,
       };
 
       const fullInst = inst;
@@ -259,12 +272,13 @@ export class AcoTuner {
       customerCount: input?.customerCount ?? 10,
       seeds: input?.seeds ?? [1, 2, 3, 4, 5],
       generateConfig: input?.generateConfig ?? {},
-      alphas: input?.alphas ?? [0.5, 1.0, 2.0],
-      betas: input?.betas ?? [2, 3, 5],
-      rhos: input?.rhos ?? [0.1, 0.2],
+      alphas: input?.alphas ?? [...DEFAULT_ACO_TUNE_GRID.alphas],
+      betas: input?.betas ?? [...DEFAULT_ACO_TUNE_GRID.betas],
+      rhos: input?.rhos ?? [...DEFAULT_ACO_TUNE_GRID.rhos],
       acoIterations: input?.acoIterations ?? 50,
       timeLimitPerRun: input?.timeLimitPerRun ?? 3000,
       maxBruteForceN: input?.maxBruteForceN ?? 12,
+      useLocalSearch: input?.useLocalSearch ?? true,
     };
   }
 

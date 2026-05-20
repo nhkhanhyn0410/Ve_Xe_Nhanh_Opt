@@ -17,7 +17,7 @@ export class CreateUserDto {
   @IsString()
   fullName: string;
 
-  @ApiProperty()
+  @ApiProperty({ enum: Gender, enumName: 'Gender' })
   @IsNotEmpty({ message: 'Giới tính không được để trống' })
   @IsEnum(Gender)
   gender: Gender;

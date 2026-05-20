@@ -52,7 +52,7 @@ export class SolveResponseDto {
   depotName!: string;
 
   @ApiProperty({
-    example: [106.7116, 10.8163],
+    example: [106.815484, 10.880216],
     description: 'Tọa độ depot xuất phát [lng, lat]',
   })
   depotCoordinates!: [number, number];
@@ -103,8 +103,8 @@ export class SolveResponseDto {
       'Polyline đường thật từ OSRM (GeoJSON LineString) — mảng [lng, lat]. ' +
       'Null nếu OSRM không khả dụng; frontend nên fallback sang đường thẳng.',
     example: [
-      [106.7116, 10.8163],
-      [106.712, 10.815],
+      [106.815484, 10.880216],
+      [106.812, 10.875],
       [106.6988, 10.7793],
     ],
   })
